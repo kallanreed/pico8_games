@@ -1,3 +1,4 @@
 # Export types
 *.png
 *.wav
+.DS_Store
