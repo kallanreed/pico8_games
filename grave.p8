@@ -45,7 +45,7 @@ function _init()
   x=10, y=96,flp=f,
   dx=0, dy=0,
   max_dx=2, max_dy=3,
-		acc=0.5, jump=3,
+  acc=0.5, jump=3,
   grav=0.3, frct=0.7,
  }
  
@@ -67,7 +67,7 @@ end
 -- update
 
 function clamp(val,max_v)
-	return mid(-max_v,val,max_v)
+ return mid(-max_v,val,max_v)
 end
 
 function player_update()
@@ -97,18 +97,17 @@ function player_update()
   plr.dy=0
  end
 
-	if plr.x<map_min then
-	 plr.x=map_min
-	 plr.dx=0
-	end
+ if plr.x<map_min then
+  plr.x=map_min
+  plr.dx=0
+ end
 
 end
 
 function _update()
 
-	player_update();
+ player_update();
 
- 
  cam_x=plr.x-56
  if (cam_x < map_min) cam_x=0
 end
@@ -116,26 +115,26 @@ end
 -- draw
 
 function draw_player()
-	spr(plr.sp,plr.x,plr.y,plr.w/8,plr.h/8,plr.flp)
+ spr(plr.sp,plr.x,plr.y,plr.w/8,plr.h/8,plr.flp)
 end
 
 -- drawable dispatch
 function draw_one(d)
-	d:draw()
+ d:draw()
 end
 
 -- main draw loop
 function _draw()
-	cls()
-	camera(cam_x,0)
-	map(0,0,0,0,128,32,0)
+ cls()
+ camera(cam_x,0)
+ map(0,0,0,0,128,32,0)
 	
-	foreach(drawable, draw_one)
-	draw_player()
+ foreach(drawable, draw_one)
+  draw_player()
 
 
-	-- draw foreground
-	map(0,0,0,0,128,32,2)
+ -- draw foreground
+ map(0,0,0,0,128,32,2)
 end
 -->8
 -- collision
