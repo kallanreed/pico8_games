@@ -13,7 +13,30 @@ function interactive(x,y,w,h,fn)
  }
 end
 
+function sndtrig(x,y,snd)
+	local st=interactive(x,y,1,1,
+	 function() sfx(snd) end)
+end
 
+function overlaps(a,b)
+	local ax2=a.x+a.w
+	local ay2=a.y+a.h
+	local bx2=b.x+b.w
+	local by2=b.y+b.h
+	-- no overlap if any true
+	return not (ax2<b.x
+	         or a.x>bx2
+	         or ay2<b.y
+	         or a.y>by2)
+end
+
+function get_inter()
+	for i=1,#inter do
+	 sfx(9)
+		local o=inter[i]
+		if (overlaps(plr,o)) return o
+	end
+end
 
 -- animate the map sprite @x,y
 function blink(x,y,rate,jit)
@@ -79,7 +102,7 @@ function _init()
  
  
  inter={}
- 
+ add(inter, sndtrig(9*8,12*8,11))
  
  cam_x=0
  map_min=0
@@ -123,7 +146,7 @@ function player_update()
 
   if collide(plr,⬇️,5) then
    plr.dy=0
-   plr.y-=((plr.y+plr.h+2)%8)-2
+   plr.y-=((plr.y+plr.h+1)%8)-1
    plr.falling=false
    plr.landed=true
   end
@@ -148,6 +171,8 @@ function player_update()
  then
   plr.grabbing=true
   plr.gt=t()
+  local i=get_inter()
+  if (i) i:action()
  end
 
  if abs(plr.dx)<.2 then
