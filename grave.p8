@@ -14,7 +14,7 @@ function interactive(x,y,w,h,fn)
 end
 
 function sndtrig(x,y,snd)
-	local st=interactive(x,y,1,1,
+	return interactive(x,y,8,8,
 	 function() sfx(snd) end)
 end
 
@@ -24,15 +24,15 @@ function overlaps(a,b)
 	local bx2=b.x+b.w
 	local by2=b.y+b.h
 	-- no overlap if any true
-	return not (ax2<b.x
-	         or a.x>bx2
-	         or ay2<b.y
-	         or a.y>by2)
+	return not (ax2<=b.x
+	         or a.x>=bx2
+	         or ay2<=b.y
+	         or a.y>=by2)
 end
 
+-- get first overlapping interactive
 function get_inter()
 	for i=1,#inter do
-	 sfx(9)
 		local o=inter[i]
 		if (overlaps(plr,o)) return o
 	end
@@ -100,9 +100,14 @@ function _init()
  add(drawable, blink(9,12))
  add(drawable, blink(41,10))
  
- 
  inter={}
  add(inter, sndtrig(9*8,12*8,11))
+ add(inter, sndtrig(2*8,9*8,12))
+
+ gen={}
+ add(gen, sparkler(2*8+4, 9*8+4, 10))
+ 
+ part={}
  
  cam_x=0
  map_min=0
@@ -112,10 +117,6 @@ function _init()
 end
 -->8
 -- update
-
-function clamp(val,max_v)
- return mid(-max_v,val,max_v)
-end
 
 function player_update()
  -- input
@@ -195,7 +196,10 @@ end
 
 function _update()
 
- player_update();
+ player_update()
+
+ foreach(gen, invoke)
+ update_particles()
 
 	-- camera tracking
 	-- plr.x has a lot of jitter so flr
@@ -207,13 +211,11 @@ end
 -- draw
 
 -- get next sprite
-function nxt(i,mn,mx)
+function nxt(i,_min,_max)
  i+=1
- if (i>=mn and i<=mx) return i
- return mn
+ if (i>=_min and i<=_max) return i
+ return _min
 end
-
-function str(s) return tostring(s) end
 
 function draw_player()
  if plr.jumping then
@@ -241,22 +243,25 @@ function draw_player()
  --rect(x1r,y1r,x2r,y2r,7)
 end
 
--- drawable dispatch
-function draw_one(d)
- d()
-end
-
 -- main draw loop
 function _draw()
  cls()
  camera(cam_x,0)
  map(0,0,0,0,128,32,0)
+
+ draw_particles()
 	
- foreach(drawable, draw_one)
+ foreach(drawable, invoke)
  draw_player()
 
  -- draw foreground
  map(0,0,0,0,128,32,2)
+
+-- for i=1,#inter do
+--  local _i=inter[i]
+--  rect(_i.x,_i.y,_i.x+_i.w,_i.y+_i.h,6)
+-- end 
+
 end
 -->8
 -- collision
@@ -290,6 +295,63 @@ function collide(obj,dir,flag)
  then return true end
  
  return false
+end
+-->8
+-- particles
+
+function sparkler(x,y,col)
+ local ani=0
+ local mxd=.7
+ return function()
+  if t()-ani>.1 then
+   ani=t()
+   add(part,{
+    x=x, y=y, col=col,
+    dx=rnd(2*mxd)-mxd,
+    dy=rnd(2*mxd)-mxd,
+    age=0, mxage=rnd(5)+8
+   })
+  end
+ end
+end
+
+function update_particles()
+	for i=#part,1,-1 do
+	 local _p=part[i]
+	 
+	 _p.age+=1
+	 if _p.age>_p.mxage then
+	  deli(part,i)
+	  
+	 else
+	  _p.x+=_p.dx
+	  _p.y+=_p.dy
+	  if (_p.update) _p:update()
+	 end
+	end
+end
+
+function draw_particles()
+ for i=1,#part do
+  local	_p=part[i]
+  if _p.draw then
+   _p:draw()
+  else
+   pset(_p.x,_p.y,_p.col)
+  end 
+ end
+end
+-->8
+-- utils
+
+function invoke(f) f() end
+
+function clamp(val,max_v)
+ return mid(-max_v,val,max_v)
+end
+
+function str(s)
+ return tostring(s)
 end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -511,6 +573,7 @@ __sfx__
 8d0500002373225742227522374221732227221f7221f7101b7101170000700007000070000700007000070000700007000070000700007000070000700007000070000700007000070000700007000070000700
 060600001a5311d531205310050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005000050000500
 490400001c45018430284200040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401
+010a0000240502d050300502505027050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __music__
 00 00414244
 01 00024344
