@@ -17,7 +17,7 @@ function callm(method, ...)
   if type(o)=="table" then
    local m=o[method]
    if type(m)=="function" then
-    m(unpack(params))
+    m(o,unpack(params))
    end
   end
  end
@@ -25,9 +25,9 @@ end
 
 function dot(x, y)
  return {x=x, y=y,
-  draw=function(col)
+  draw=function(self,col)
    local c=col or 7
-  	pset(x,y,c)
+  	pset(self.x,self.y,c)
   end
  }
 end

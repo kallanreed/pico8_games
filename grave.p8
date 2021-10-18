@@ -4,7 +4,10 @@ __lua__
 -- grave matters
 -- by 😐
 
-music(0,0,7)
+--music(0,0,7)
+
+-- todo: real prototypes to
+-- cut down on functions
 
 function interactive(x,y,w,h,fn)
  return {
@@ -18,61 +21,89 @@ function sndtrig(x,y,snd)
 	 function() sfx(snd) end)
 end
 
-function overlaps(a,b)
-	local ax2=a.x+a.w
-	local ay2=a.y+a.h
-	local bx2=b.x+b.w
-	local by2=b.y+b.h
-	-- no overlap if any true
-	return not (ax2<=b.x
-	         or a.x>=bx2
-	         or ay2<=b.y
-	         or a.y>=by2)
-end
 
--- get first overlapping interactive
-function get_inter()
-	for i=1,#inter do
-		local o=inter[i]
-		if (overlaps(plr,o)) return o
-	end
-end
 
 -- animate the map sprite @x,y
 function blink(x,y,rate,jit)
- local sp=mget(x,y)
- local r=rate or .5
- local jit=jit or r*.5
- local cur=0 local ani=0
- return function()
-   mset(x,y,sp+cur)
-   if (t()-ani>r) then
-    cur^^=1
-    ani=t()+(rnd(2*jit)-jit)
+ local _r=rate or .5
+ return {
+  x=x, y=y, sp=mget(x,y),
+  r=_r, jit=jit or _r*.5,
+  cur=0, ani=0,
+  draw=function(my)
+   mset(my.x,my.y,my.sp+my.cur)
+   if (t()-my.ani>my.r) then
+    my.cur^^=1
+    my.ani=t()+(rnd(2*my.jit)-my.jit)
    end
- end
+  end
+ }
 end
 
 -- render sprite in relation camera
 function fixed(sp,x,y,w,h,speed)
- return function()
-  local w=w or 1
-  local h=h or 1
-  local speed=speed or 1
-  spr(sp,x+cam_x*speed,y,w,h)
-  end
+	return {
+	 sp=sp, x=x, y=y,
+	 w=w or 1, h=h or 1,
+	 speed=speed or 1,
+	 draw=function(my)
+	  spr(my.sp,my.x+cam_x*speed,
+	   my.y,my.w,my.h)
+	 end
+	}
+end
+
+-- render in relation player
+function follow(sp,x,y,w,h)
+	return {
+	 sp=sp, x=x, y=y,
+	 w=w or 1, h=h or 1,
+	 speed=speed or 1,
+	 draw=function(my)
+	  spr(my.sp,my.x+plr.x,
+	  my.y+plr.y,my.w,my.h,plr.flp)
+	 end
+	}
 end
 
 -- bounce sprite at map x,y
 function bounce(sp,x,y,w,h)
- return function()
-  local w=w or 1
-  local h=h or 1
-  spr(sp,x*8,y*8+sin(t())*2,w,h)
+ return {
+  sp=sp, x=x, y=y,
+  w=w or 1, h=h or 1,
+  draw=function(my)
+   spr(my.sp,my.x*8,
+    my.y*8+sin(t())*2,
+    my.w,my.h)
   end
+ }
+end
+
+-- removes itself from drawlist
+function timed(x,y,sec)
+ return {
+  x=x, y=y, del_time=t()+sec,
+  update=function(my)
+   if t()>my.del_time then
+    del(drawable, my)
+   end
+  end
+ }
+end
+
+function timed_text(x,y,txt,sec)
+ local t=timed(x,y,sec)
+ t.txt=txt
+ t.draw=function(my)
+  ?my.txt,my.x,my.y
+  my:update()
+ end
+ 
+ return t
 end
 
 function _init()
+ -- player state 
  plr={
   sp=1, w=8, h=16,
   x=10, y=96,flp=f,
@@ -87,28 +118,37 @@ function _init()
   grabbing=false, gt=0,
   ani=0,
  }
- 
+
+ -- game objects
  drawable={}
+ inter={} -- interactive
+ gen={} -- generators
+ part={} -- particles
+ timer={}
+
+ -- moon and clouds
  add(drawable, fixed(37,32,32,2,2,.98))
  add(drawable, fixed(40,30,28,4,1,.8))
  add(drawable, fixed(40,74,40,4,1,.8))
 
-	add(drawable, bounce(57,2,9))
-	add(drawable, bounce(58,18,9))
-	
+ -- keys
+ add(drawable, bounce(57,2,9))
+ add(gen, sparkler(2*8+4,9*8+4,7,10))
+ add(drawable, bounce(58,18,9))
+
+ -- pumpkins, lights
  add(drawable, blink(6,11,.20))
  add(drawable, blink(9,12))
  add(drawable, blink(41,10))
- 
- inter={}
+
+ -- sound triggers
  add(inter, sndtrig(9*8,12*8,11))
  add(inter, sndtrig(2*8,9*8,12))
+ add(inter, sndtrig(18*8,13*8,13))
 
- gen={}
- add(gen, sparkler(2*8+4, 9*8+4, 10))
- 
- part={}
- 
+--	add(drawable, timed_text(64,64,"♥",4))
+--	add(drawable, follow(48,0,-16))
+
  cam_x=0
  map_min=0
  map_max=48*8
@@ -164,6 +204,11 @@ function player_update()
    plr.dx=0
   end
  end
+ 
+ if abs(plr.dx)<.2 then
+  plr.dx=0
+  plr.walking=false
+ end
 
  -- todo: walking and grabbing?
  -- process pickups
@@ -174,11 +219,6 @@ function player_update()
   plr.gt=t()
   local i=get_inter()
   if (i) i:action()
- end
-
- if abs(plr.dx)<.2 then
-  plr.dx=0
-  plr.walking=false
  end
  
  plr.dx=clamp(plr.dx,plr.max_dx)
@@ -198,7 +238,8 @@ function _update()
 
  player_update()
 
- foreach(gen, invoke)
+ foreach(gen, do_update)
+ foreach(timer, do_update)
  update_particles()
 
 	-- camera tracking
@@ -238,9 +279,6 @@ function draw_player()
  end
 
  spr(plr.sp,plr.x,plr.y,plr.w/8,plr.h/8,plr.flp)
- --print("s="..plr.sp.." r="..str(plr.walking),plr.x,plr.y-8)
- --print("dx="..plr.dx.."dy="..plr.dy,plr.x,plr.y-8)
- --rect(x1r,y1r,x2r,y2r,7)
 end
 
 -- main draw loop
@@ -251,7 +289,7 @@ function _draw()
 
  draw_particles()
 	
- foreach(drawable, invoke)
+ foreach(drawable, do_draw)
  draw_player()
 
  -- draw foreground
@@ -262,6 +300,7 @@ function _draw()
 --  rect(_i.x,_i.y,_i.x+_i.w,_i.y+_i.h,6)
 -- end 
 
+ rect(x1r,y1r,x2r,y2r,7)
 end
 -->8
 -- collision
@@ -271,8 +310,7 @@ function collide(obj,dir,flag)
  local w=obj.w local h=obj.h
  local x1=0 local y1=0
  local x2=0 local y2=0
- -- need better test for
- -- larger sprites
+
  if dir==⬅️ then
   x1=x-1 y1=y+3
   x2=x-2 y2=y+h-1
@@ -284,7 +322,7 @@ function collide(obj,dir,flag)
   x2=x+w-3 y2=y+h+1
  end
  
- x1r=x1 y1r=y1 x2r=x2 y2r=y2
+ --x1r=x1 y1r=y1 x2r=x2 y2r=y2
 
  x1/=8 y1/=8 x2/=8 y2/=8
  
@@ -299,23 +337,35 @@ end
 -->8
 -- particles
 
-function sparkler(x,y,col)
- local ani=0
- local mxd=.7
- return function()
-  if t()-ani>.1 then
-   ani=t()
-   add(part,{
-    x=x, y=y, col=col,
-    dx=rnd(2*mxd)-mxd,
-    dy=rnd(2*mxd)-mxd,
-    age=0, mxage=rnd(5)+8
-   })
+-- generator that emits particles
+-- outward from a single point
+function sparkler(x,y,col1,col2)
+ return {
+  x=x, y=y, col1=col1, col2=col2,
+  ani=0, mxd=1, rate=.1,
+  
+  update=function(my)
+   if t()-my.ani>my.rate then
+    my.ani=t()
+    add(part,{
+     x=my.x, y=my.y, col=col1,
+     dx=rnd(.5*my.mxd,my.mxd)*rnd_sign(),
+     dy=rnd(.5*my.mxd,my.mxd)*rnd_sign(),
+     age=0, mxage=rnd(8)+8,
+     
+     update=function(_my)
+      if (_my.age*1.5>_my.mxage) _my.col=my.col2
+     end
+    })
+    
+   end
   end
- end
+ }
 end
 
+-- update each particle in 'part'
 function update_particles()
+ -- reverse iter for easy delete
 	for i=#part,1,-1 do
 	 local _p=part[i]
 	 
@@ -324,9 +374,9 @@ function update_particles()
 	  deli(part,i)
 	  
 	 else
+    if (_p.update) _p:update()
 	  _p.x+=_p.dx
 	  _p.y+=_p.dy
-	  if (_p.update) _p:update()
 	 end
 	end
 end
@@ -344,10 +394,52 @@ end
 -->8
 -- utils
 
-function invoke(f) f() end
+function do_update(o)
+ o:update()
+end
+
+function do_draw(o)
+ o:draw()
+end
+
+function rnd_sign()
+ if (rnd()<.5) return -1
+ return 1
+end
 
 function clamp(val,max_v)
  return mid(-max_v,val,max_v)
+end
+
+function overlaps(a,b)
+	local ax2=a.x+a.w
+	local ay2=a.y+a.h
+	local bx2=b.x+b.w
+	local by2=b.y+b.h
+	-- no overlap if any true
+	return not (ax2<=b.x
+	         or a.x>=bx2
+	         or ay2<=b.y
+	         or a.y>=by2)
+end
+
+-- get first overlapping interactive
+function get_inter()
+ local reach=4
+ local hb={
+  x=plr.x, y=plr.y+8,
+  w=plr.w+reach, h=plr.h-8
+ }
+
+	-- looking left?
+ if (plr.flp) hb.x-=reach
+
+	x1r=hb.x y1r=hb.y
+	x2r=hb.x+hb.w y2r=hb.y+hb.h
+
+	for i in all(inter) do
+		if (overlaps(hb,i)) return i
+	end
 end
 
 function str(s)
@@ -574,6 +666,7 @@ __sfx__
 060600001a5311d531205310050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005000050000500
 490400001c45018430284200040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401
 010a0000240502d050300502505027050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+910400000c2500c250002000c2500c2500c2500c25000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200
 __music__
 00 00414244
 01 00024344
