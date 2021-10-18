@@ -16,12 +16,30 @@ function interactive(x,y,w,h,fn)
  }
 end
 
+function cond_trig(test,fn_t,fn_f)
+end
+
+function locked_door(x,y)
+ local fn=function(my)
+  if plr.items.key<1 then
+   sfx(13)
+  else
+   mset(x,y,0)
+   mset(x,y-1,0)
+   sfx(12)
+   del(inter, my)
+  end
+ end
+ return interactive(x*8,y*8,8,8,fn)
+end
+
 function sndtrig(x,y,snd)
 	return interactive(x,y,8,8,
 	 function() sfx(snd) end)
 end
 
 
+-- drawables
 
 -- animate the map sprite @x,y
 function blink(x,y,rate,jit)
@@ -53,7 +71,7 @@ function fixed(sp,x,y,w,h,speed)
 	}
 end
 
--- render in relation player
+-- render sprite in relation player
 function follow(sp,x,y,w,h)
 	return {
 	 sp=sp, x=x, y=y,
@@ -79,27 +97,25 @@ function bounce(sp,x,y,w,h)
  }
 end
 
--- removes itself from drawlist
-function timed(x,y,sec)
+
+-- timers
+
+function run_after(sec,fn)
  return {
-  x=x, y=y, del_time=t()+sec,
+  action=fn,
+  end_time=t()+sec,
   update=function(my)
-   if t()>my.del_time then
-    del(drawable, my)
+   if t()>my.end_time then
+    my:action()
+    del(timer,my)
    end
   end
  }
 end
 
-function timed_text(x,y,txt,sec)
- local t=timed(x,y,sec)
- t.txt=txt
- t.draw=function(my)
-  ?my.txt,my.x,my.y
-  my:update()
- end
- 
- return t
+function del_after(list,item,sec)
+ return add(timer, run_after(sec,
+  function() del(list,item) end))
 end
 
 function _init()
@@ -117,6 +133,9 @@ function _init()
   landed=true,
   grabbing=false, gt=0,
   ani=0,
+  items={
+   key=1  
+  }
  }
 
  -- game objects
@@ -142,12 +161,14 @@ function _init()
  add(drawable, blink(41,10))
 
  -- sound triggers
- add(inter, sndtrig(9*8,12*8,11))
- add(inter, sndtrig(2*8,9*8,12))
- add(inter, sndtrig(18*8,13*8,13))
+-- add(inter, sndtrig(9*8,12*8,11))
+ add(inter, sndtrig(2*8,9*8,14))
+-- add(inter, sndtrig(18*8,13*8,13))
+ add(inter, locked_door(18,13))
 
---	add(drawable, timed_text(64,64,"♥",4))
---	add(drawable, follow(48,0,-16))
+
+	local _f=add(drawable, follow(48,0,-16))
+ del_after(drawable,_f,5)
 
  cam_x=0
  map_min=0
@@ -218,7 +239,8 @@ function player_update()
   plr.grabbing=true
   plr.gt=t()
   local i=get_inter()
-  if (i) i:action()
+  if i then i:action()
+  else sfx(11) end
  end
  
  plr.dx=clamp(plr.dx,plr.max_dx)
@@ -664,9 +686,10 @@ __sfx__
 4b020000046330e630136300162002615066000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 8d0500002373225742227522374221732227221f7221f7101b7101170000700007000070000700007000070000700007000070000700007000070000700007000070000700007000070000700007000070000700
 060600001a5311d531205310050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005000050000500
-490400001c45018430284200040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401004010040100401
+490400002015015100101500010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101
 010a0000240502d050300502505027050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 910400000c2500c250002000c2500c2500c2500c25000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200
+91040000183501c3501f3501a3501e350213502635000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300000000000000000
 __music__
 00 00414244
 01 00024344
