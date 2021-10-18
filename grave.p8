@@ -4,11 +4,14 @@ __lua__
 -- grave matters
 -- by 😐
 
---music(0,0,7)
+music(0,0,7)
 
 -- todo: real prototypes to
 -- cut down on functions
 
+-- interactive
+
+-- make an interactive at x,y
 function interactive(x,y,w,h,fn)
  return {
   x=x, y=y, w=w, h=h,
@@ -16,33 +19,66 @@ function interactive(x,y,w,h,fn)
  }
 end
 
-function cond_trig(test,fn_t,fn_f)
+-- make collectible at map x,y
+function collectible(sp,x,y,w,h,on_collect)
+ local fn=function(my)
+  del(drawable, my.bounce)
+  del(inter, my)
+  my:on_collect()
+ end
+ local _i=interactive(x*8,y*8,w*8,h*8,fn)
+ _i.bounce=add(drawable, bounce(sp,x,y,w,h))
+ _i.on_collect=on_collect
+ return _i
 end
 
+-- make key at map x,y
+function key_collectible(x,y)
+ local fn=function(my)
+  plr.items.key+=1
+  sfx(14)
+  del(gen, my.sparkler)
+ end
+ local _c=collectible(57,x,y,1,1,fn)
+ _c.sparkler=add(gen, sparkler(x*8+4,y*8+4,7,10))
+ return _c
+end
+
+-- make door at map x,y interactive
 function locked_door(x,y)
  local fn=function(my)
   if plr.items.key<1 then
-   sfx(13)
+   sfx(13) -- fail
+   del_after(3, drawable,
+    add(drawable, follow(58,0,-12)))
   else
+   sfx(12) -- success
+   -- remove door
    mset(x,y,0)
    mset(x,y-1,0)
-   sfx(12)
+  
+   -- remove trigger
    del(inter, my)
+   
+   -- consume key
+   plr.items.key-=1
   end
  end
  return interactive(x*8,y*8,8,8,fn)
 end
 
+-- add sound trigger at map x,y
 function sndtrig(x,y,snd)
-	return interactive(x,y,8,8,
-	 function() sfx(snd) end)
+ return interactive(x*8,y*8,8,8,
+  function() sfx(snd) end)
 end
 
 
 -- drawables
 
--- animate the map sprite @x,y
-function blink(x,y,rate,jit)
+-- rotate map sprite @x,y
+-- with next in sprite sheet
+function flicker(x,y,rate,jit)
  local _r=rate or .5
  return {
   x=x, y=y, sp=mget(x,y),
@@ -58,30 +94,32 @@ function blink(x,y,rate,jit)
  }
 end
 
--- render sprite in relation camera
+-- render sprite in relation
+-- to the camera location
 function fixed(sp,x,y,w,h,speed)
-	return {
-	 sp=sp, x=x, y=y,
-	 w=w or 1, h=h or 1,
-	 speed=speed or 1,
-	 draw=function(my)
-	  spr(my.sp,my.x+cam_x*speed,
-	   my.y,my.w,my.h)
-	 end
-	}
+ return {
+  sp=sp, x=x, y=y,
+  w=w or 1, h=h or 1,
+  speed=speed or 1,
+  draw=function(my)
+   spr(my.sp,my.x+cam_x*speed,
+    my.y,my.w,my.h)
+  end
+ }
 end
 
--- render sprite in relation player
-function follow(sp,x,y,w,h)
-	return {
-	 sp=sp, x=x, y=y,
-	 w=w or 1, h=h or 1,
-	 speed=speed or 1,
-	 draw=function(my)
-	  spr(my.sp,my.x+plr.x,
-	  my.y+plr.y,my.w,my.h,plr.flp)
-	 end
-	}
+-- render sprite in relation
+-- player location
+function follow(sp,x,y,w,h,flp)
+ return {
+  sp=sp, x=x, y=y, flp=flp or 0,
+  w=w or 1, h=h or 1,
+  speed=speed or 1,
+  draw=function(my)
+   spr(my.sp,my.x+plr.x,
+   my.y+plr.y,my.w,my.h,my_flp and plr.flp)
+  end
+ }
 end
 
 -- bounce sprite at map x,y
@@ -113,7 +151,7 @@ function run_after(sec,fn)
  }
 end
 
-function del_after(list,item,sec)
+function del_after(sec,list,item)
  return add(timer, run_after(sec,
   function() del(list,item) end))
 end
@@ -134,7 +172,7 @@ function _init()
   grabbing=false, gt=0,
   ani=0,
   items={
-   key=1  
+   key=0
   }
  }
 
@@ -150,25 +188,14 @@ function _init()
  add(drawable, fixed(40,30,28,4,1,.8))
  add(drawable, fixed(40,74,40,4,1,.8))
 
- -- keys
- add(drawable, bounce(57,2,9))
- add(gen, sparkler(2*8+4,9*8+4,7,10))
- add(drawable, bounce(58,18,9))
-
  -- pumpkins, lights
- add(drawable, blink(6,11,.20))
- add(drawable, blink(9,12))
- add(drawable, blink(41,10))
+ add(drawable, flicker(6,11,.20))
+ add(drawable, flicker(9,12))
+ add(drawable, flicker(41,10))
 
- -- sound triggers
--- add(inter, sndtrig(9*8,12*8,11))
- add(inter, sndtrig(2*8,9*8,14))
--- add(inter, sndtrig(18*8,13*8,13))
+ -- interactive
+ add(inter, key_collectible(2,9))
  add(inter, locked_door(18,13))
-
-
-	local _f=add(drawable, follow(48,0,-16))
- del_after(drawable,_f,5)
 
  cam_x=0
  map_min=0
@@ -240,7 +267,8 @@ function player_update()
   plr.gt=t()
   local i=get_inter()
   if i then i:action()
-  else sfx(11) end
+  else sfx(11) -- no-op sound
+  end
  end
  
  plr.dx=clamp(plr.dx,plr.max_dx)
@@ -264,8 +292,8 @@ function _update()
  foreach(timer, do_update)
  update_particles()
 
-	-- camera tracking
-	-- plr.x has a lot of jitter so flr
+ -- camera tracking
+ -- plr.x has a lot of jitter so flr
  cam_x=flr(plr.x)-56
  if (cam_x < map_min) cam_x=0
  if (cam_x > map_max-128) cam_x=map_max-128;
@@ -310,7 +338,7 @@ function _draw()
  map(0,0,0,0,128,32,0)
 
  draw_particles()
-	
+ 
  foreach(drawable, do_draw)
  draw_player()
 
@@ -322,7 +350,12 @@ function _draw()
 --  rect(_i.x,_i.y,_i.x+_i.w,_i.y+_i.h,6)
 -- end 
 
- rect(x1r,y1r,x2r,y2r,7)
+ -- collected items
+ for i=1,plr.items.key do
+  spr(57,i*8+cam_x,0)
+ end
+
+-- rect(x1r,y1r,x2r,y2r,7)
 end
 -->8
 -- collision
@@ -388,24 +421,24 @@ end
 -- update each particle in 'part'
 function update_particles()
  -- reverse iter for easy delete
-	for i=#part,1,-1 do
-	 local _p=part[i]
-	 
-	 _p.age+=1
-	 if _p.age>_p.mxage then
-	  deli(part,i)
-	  
-	 else
+ for i=#part,1,-1 do
+  local _p=part[i]
+  
+  _p.age+=1
+  if _p.age>_p.mxage then
+   deli(part,i)
+   
+  else
     if (_p.update) _p:update()
-	  _p.x+=_p.dx
-	  _p.y+=_p.dy
-	 end
-	end
+   _p.x+=_p.dx
+   _p.y+=_p.dy
+  end
+ end
 end
 
 function draw_particles()
  for i=1,#part do
-  local	_p=part[i]
+  local _p=part[i]
   if _p.draw then
    _p:draw()
   else
@@ -434,15 +467,15 @@ function clamp(val,max_v)
 end
 
 function overlaps(a,b)
-	local ax2=a.x+a.w
-	local ay2=a.y+a.h
-	local bx2=b.x+b.w
-	local by2=b.y+b.h
-	-- no overlap if any true
-	return not (ax2<=b.x
-	         or a.x>=bx2
-	         or ay2<=b.y
-	         or a.y>=by2)
+ local ax2=a.x+a.w
+ local ay2=a.y+a.h
+ local bx2=b.x+b.w
+ local by2=b.y+b.h
+ -- no overlap if any true
+ return not (ax2<=b.x
+          or a.x>=bx2
+          or ay2<=b.y
+          or a.y>=by2)
 end
 
 -- get first overlapping interactive
@@ -453,15 +486,15 @@ function get_inter()
   w=plr.w+reach, h=plr.h-8
  }
 
-	-- looking left?
+ -- looking left?
  if (plr.flp) hb.x-=reach
 
-	x1r=hb.x y1r=hb.y
-	x2r=hb.x+hb.w y2r=hb.y+hb.h
+ x1r=hb.x y1r=hb.y
+ x2r=hb.x+hb.w y2r=hb.y+hb.h
 
-	for i in all(inter) do
-		if (overlaps(hb,i)) return i
-	end
+ for i in all(inter) do
+  if (overlaps(hb,i)) return i
+ end
 end
 
 function str(s)
@@ -686,7 +719,7 @@ __sfx__
 4b020000046330e630136300162002615066000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 8d0500002373225742227522374221732227221f7221f7101b7101170000700007000070000700007000070000700007000070000700007000070000700007000070000700007000070000700007000070000700
 060600001a5311d531205310050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005010050100501005000050000500
-490400002015015100101500010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101001010010100101
+490400002035015300103500030100301003010030100301003010030100301003010030100301003010030100301003010030100301003010030100301003010030100301003010030100301003010030100301
 010a0000240502d050300502505027050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 910400000c2500c250002000c2500c2500c2500c25000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200
 91040000183501c3501f3501a3501e350213502635000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300000000000000000
