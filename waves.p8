@@ -2,20 +2,19 @@ pico-8 cartridge // http://www.pico-8.com
 version 33
 __lua__
 function _init()
- x=0 y=0 y2=0 y3=0
+ x=0 y1=0 y2=0
  cls()
 end
 
 function _draw()
-	y=sin(t())*2
-	y2=cos(t()*2)*2
-	y3+=cos(t())/1
+	y1+=cos(t())
+	y2+=sin(t())
 	
-	pset(x,50-t(),7)
-	pset(x,y+60,8)
-	pset(x,y2+68,9)
-	pset(x,y3+76,10)
-	pset(x,76,10)
+	pset(x,30,8)
+	pset(x,y1+30,8)
+	
+	pset(x,70,9)
+	pset(x,y2+70,9)
 	
 	x+=1
 	if x>127 then
