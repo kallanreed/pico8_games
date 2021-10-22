@@ -277,7 +277,7 @@ function _init()
  add(inter, gem_ghost(35,8))
  add(inter, gem_collectible(58,3))
  add(inter, witch_brew(14,2))
- add(inter, locked_door(69,13))
+ add(inter, locked_door(70,13))
 
  add(inter, grave(22,13,"bELVA",
  "sPOOKED BY A GHOST"))
