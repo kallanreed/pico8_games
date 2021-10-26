@@ -5,6 +5,7 @@ __lua__
 -- by 😐 kallanreed
 
 music(0,0,7)
+hard_mode=true
 
 -- todo: only draw particles
 -- in active view
@@ -208,9 +209,25 @@ function temp_text(x,y,txt,col)
  return it
 end
 
+function toggle_difficulty()
+ hard_mode=not hard_mode
+ _init()
+end
+
 function _init()
  pal()
  poke(0x5f2e,1)
+
+ -- set up menus
+ if hard_mode then
+  diff_menu="easy mode"
+ else
+  diff_menu="hard mode"
+ end
+
+ menuitem(1,diff_menu,
+  toggle_difficulty)
+ menuitem(2,"start over",_init)
 
 	-- camera tracking
  cam_x=0
@@ -278,11 +295,11 @@ function _init()
  spr_bg(40,175,32,4,1,.8)
 
  -- pumpkins, lights
- add(timer, map_swap(51,6,11,.2))
- add(timer, map_swap(35,12,13))
- add(timer, map_swap(35,41,10))
- add(timer, map_swap(51,62,11,.2))
- add(timer, map_swap(35,102,9))
+ add_as(timer, map_swap, {
+ {51,6,11,.2}, {35,12,13},
+  {35,41,10}, {51,62,11,.2},
+  {35,102,9}
+ })
 
  -- interactive
  add(inter, key_collectible(2,7))
@@ -308,29 +325,41 @@ function _init()
  })
  
  add_as(act, bat, {
-  {9,8}, {26,6}, {70,10},
-  {76,1}, {86,0}, {99,4},
-  {104,2}
+  {9,8}, {70,10}, {99,4}
  })
  
- add(inter, grave(22,13,"bELVA",
-  "sPOOKED BY A GHOST"))
- add(inter, grave(27,13,"jETHRO",
-  "dRAINED BY A VAMPIRE"))
- add(inter, grave(48,13,"aGNES",
-  "mAULED BY A WEREWOLF"))
- add(inter, grave(64,13,"jAMES",
-  "zAPPED BY A WIZARD"))
- add(inter, grave(81,13,"nICK",
-  "dRANK A BAD POTION"))
-  
+ -- hard-mode bats
+ if hard_mode then
+  add_as(act, bat, {
+   {26,6}, {76,1},
+   {86,0}, {104,2}
+  })
+ end
+ 
+ add_as(inter, grave, {
+  {22,13,"bELVA",
+   "sPOOKED BY A GHOST"},
+  {27,13,"jETHRO",
+   "dRAINED BY A VAMPIRE"},
+  {48,13,"aGNES",
+   "mAULED BY A WEREWOLF"},
+  {64,13,"jAMES",
+   "zAPPED BY A WIZARD"},
+  {81,13,"nICK",
+   "dRANK A BAD POTION"}
+ })
+
+ -- title text
  temp_text(64,40,"\#dgRAVE mATTERS",0)
   :add_mod(cam_rel())
  temp_text(64,48,"\#d🅾️=act ❎=jump",0)
   :add_mod(cam_rel())
 
- add(gen, shiny(7*8+1,13*8+1,6,4))
- add(gen, shiny(53*8,12*8+1,64,4))
+ -- pretty up a few spikes
+ add_as(gen, shiny, {
+  {7*8+1,13*8+1,6, 4},
+  {53*8 ,12*8+1,64,4}
+ })
 
  -- test rect
  x1r=0 y1r=0 x2r=0 y2r=0
