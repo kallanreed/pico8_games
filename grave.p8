@@ -6,6 +6,7 @@ __lua__
 
 music(0,0,7)
 hard_mode=true
+show_timer=false
 
 -- todo: only draw particles
 -- in active view
@@ -228,6 +229,8 @@ function _init()
  menuitem(1,diff_menu,
   toggle_difficulty)
  menuitem(2,"start over",_init)
+ menuitem(3,"toggle timer",
+  function() show_timer=not show_timer end)
 
 	-- camera tracking
  cam_x=0
@@ -259,6 +262,8 @@ function _init()
   end_frames=60,
   allow_restart=false,
   black=129,
+  start=t(),
+  finish=0
  }
 
  -- player state 
@@ -498,6 +503,7 @@ function player_win()
  music(13,0,0xf)
  game.over=true
  game.win=true
+ game.finish=t()
  add(gen, sprite_rain(9))
 end
 -->8
@@ -591,6 +597,14 @@ function _draw()
   local sp=16
   if (plr.health<i) sp=78
   spr(sp,(i+12)*8+cam_x,1)
+ end
+ 
+ if show_timer then
+  local timer=t()-game.start
+  if game.over then
+   timer=game.finish-game.start
+  end
+  print(round(timer),cam_x+1,15*8,6)
  end
 
  if game.over then
@@ -1004,8 +1018,8 @@ function spget(sp,x,y)
  return sget(sx+x,sy+y)
 end
 
-function str(s)
- return tostring(s)
+function round(x)
+ return flr(x*100)/100
 end
 
 function log_rect(x1,y1,x2,y2)
