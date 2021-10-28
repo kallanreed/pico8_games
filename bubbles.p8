@@ -11,60 +11,68 @@ function _init()
  poke(0x5f2e,1)
 
  board={[0]=1,[9]=3,[10]=2}
- preview=bub(108,12,0,0,8)
+ preview=bub(108,12,0,0,3)
+ ●=bub(0,0,0,0,1)
  gun={
   a=90,r=12,x2=0,y2=0,
-  x1=52,y1=120,
-  dx=0,dy=0
+  x1=48,y1=120,
+  ax=0,ay=0
  }
- curr=bub(gun.x1-4,gun.y1,0,0,12)
 
  update_gun()
+ ●:reset()
 end
 
 function update_gun()
  gun.a=mid(20,gun.a,160)
  
  local a=gun.a/360
- gun.dx=cos(a)
- gun.dy=sin(a)
- gun.x2=gun.dx*gun.r+gun.x1
- gun.y2=gun.dy*gun.r+gun.y1
+ gun.ax=cos(a)
+ gun.ay=sin(a)
+ gun.x2=gun.ax*gun.r+gun.x1
+ gun.y2=gun.ay*gun.r+gun.y1
 end
 
 function _update()
  if btn(⬅️) then
-  gun.a+=3
+  gun.a+=2
   update_gun()
  end
  if btn(➡️) then
-  gun.a-=3
+  gun.a-=2
   update_gun()
  end
  
  if btnp(❎) then
   sfx(32)
-  curr.dx=gun.dx*2
-  curr.dy=gun.dy*2
+  ●.dx=gun.ax*2
+  ●.dy=gun.ay*2
  end
 
- curr:update()
+ ●:update()
 end
 
 function _draw()
  cls()
  map(0,0,0,0,16,16)
+ spr(16,36,112,3,2)
 
  for k,v in pairs(board) do
   local x,y=b2px(k)
-  draw_bubble(x,y,bub_col[v])
+  draw_bubble(x,y,v)
  end
 
  preview:draw()
- curr:draw()
+ ●:draw()
 
  line(gun.x1,gun.y1,
-  gun.x2,gun.y2,12) 
+  gun.x2,gun.y2,12)
+  
+ -- debug
+ local curri=px2b(●.x,●.y)
+ rx,ry=b2px(curri)
+ rect(rx,ry,rx+7,ry+7,8)
+ 
  pal({[0]=129,1,2,3,4,5,6,7,8,9,10,139,12,13,140,132},1)
 end
 
@@ -80,14 +88,12 @@ function update_bubble(b)
  
  -- todo
  -- collision
- -- offset rows
  
- if ny<0 then
-  -- board offset
-  nx=quant(nx,10)+8
-  ny=0
-  b.dx=0
-  b.dy=0
+ if ny<=0 then
+  local bi=px2b(nx,0)
+  board[bi]=b.col
+  b:reset()
+  return
  end
  
  b.x=nx
@@ -95,17 +101,26 @@ function update_bubble(b)
 end
 
 function draw_bubble(x,y,col)
- pal(1,col)
+ pal(1,bub_col[col])
  spr(1,x,y)
  pal()
 end
 
 function bub(x,y,dx,dy,col)
  return {
-  x=x,y=y,dx=dx,dy=dy,
+  x=x,y=y,dx=dx,dy=dy,col=col,
+  
   update=update_bubble,
   draw=function(my)
    draw_bubble(my.x,my.y,my.col)
+  end,
+  reset=function(my)
+   my.x=gun.x1-4
+   my.y=gun.y1
+   my.dx=0
+   my.dy=0
+   my.col=preview.col
+   preview.col=flr(rnd(4)+1)
   end
  }
 end
@@ -125,17 +140,26 @@ end
 function b2px(i)
  local y=flr(i/10)
  local x=i%10
- local offx=8 -- board edge
+ local offx=8 -- l edge
+
  if (band(y,1)==1) offx+=4
+
  return x*8+offx,y*8
+end
+
+-- pixels to board index
+function px2b(x,y)
+ local offx=-8 -- l edge
+ local y=flr(y/8)
+ 
+ if (band(y,1)==1) offx-=4
+ local x=flr((x+offx)/8)
+ 
+ return y*10+x
 end
 
 function clamp(val,max_v)
  return mid(-max_v,val,max_v)
-end
-
-function quant(val,buckets)
- return flr(val/buckets)*buckets
 end
 
 __gfx__
