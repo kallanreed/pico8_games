@@ -69,7 +69,7 @@ function _draw()
   gun.x2,gun.y2,12)
   
  -- debug
- local curri=px2b(●.x,●.y)
+ local curri=px2b(●.x+3,●.y+3)
  rx,ry=b2px(curri)
  rect(rx,ry,rx+7,ry+7,8)
  
@@ -90,7 +90,7 @@ function update_bubble(b)
  -- collision
  
  if ny<=0 then
-  local bi=px2b(nx,0)
+  local bi=px2b(nx+4,0)
   board[bi]=b.col
   b:reset()
   return
