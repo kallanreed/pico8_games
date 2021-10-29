@@ -14,13 +14,17 @@ function _init()
  preview=bub(108,12,0,0,3)
  ●=bub(0,0,0,0,1)
  gun={
-  a=90,r=12,x2=0,y2=0,
   x1=48,y1=120,
+  x2=0,y2=0,
+  a=90,r=12,
   ax=0,ay=0
  }
 
  update_gun()
  ●:reset()
+ 
+ rx1=0 ry1=0 rx2=0 ry2=0
+ tbi1=0 tbi2=0
 end
 
 function update_gun()
@@ -69,11 +73,32 @@ function _draw()
   gun.x2,gun.y2,12)
   
  -- debug
- local curri=px2b(●.x+3,●.y+3)
- rx,ry=b2px(curri)
- rect(rx,ry,rx+7,ry+7,8)
+ --local ci=px2b(●.x+3,●.y+3)
+ --rx,ry=b2px(ci)
+ --rect(rx,ry,rx+,ry+7,8)
+ --rx,ry=b2px(tbi1)
+ --rect(rx,ry,rx+7,ry+7,9)
+ --rx,ry=b2px(tbi2)
+ --rect(rx,ry,rx+7,ry+7,9)
+ 
+ --rect(rx1,ry1,rx2,ry2,11)
  
  pal({[0]=129,1,2,3,4,5,6,7,8,9,10,139,12,13,140,132},1)
+end
+
+--[[
+0 1 2 3 4 5
+ 0 1 2 3 4 5
+0 1 2 3 4 5
+]]
+
+function get_up(i)
+ local y=flr(i/10)
+ local x=i%10
+ y-=1 x2=1
+ if (band(y,1)==1) x2=-1
+ 
+ return y*10+x,y*10+(x+x2)
 end
 
 function update_bubble(b)
@@ -86,11 +111,27 @@ function update_bubble(b)
   sfx(33)
  end
  
- -- todo
- -- collision
+ local bi=px2b(nx+4,ny+4)
+ local nb=board[bi]
+
+ rx1=b.x rx2=b.x+7
+ ry1=b.y-4 ry2=b.y+4
  
- if ny<=0 then
-  local bi=px2b(nx+4,0)
+ tbi1,tbi2=get_up(bi)
+ 
+ local t1x,t1y=b2px(tbi1)
+ local t2x,t2y=b2px(tbi2)
+ 
+ o1=overlaps(
+  {x=nx,y=ny,w=8,h=8},
+  {x=t1x,y=t1y,w=8,h=8})
+  and board[tbi1] != nil
+ o2=overlaps(
+  {x=nx,y=ny,w=8,h=8},
+  {x=t2x,y=t2y,w=8,h=8})
+  and board[tbi2] != nil
+   
+ if ny<=0 or o1 or o2 then
   board[bi]=b.col
   b:reset()
   return
@@ -111,16 +152,19 @@ function bub(x,y,dx,dy,col)
   x=x,y=y,dx=dx,dy=dy,col=col,
   
   update=update_bubble,
+  
   draw=function(my)
    draw_bubble(my.x,my.y,my.col)
   end,
+  
   reset=function(my)
    my.x=gun.x1-4
    my.y=gun.y1
    my.dx=0
    my.dy=0
    my.col=preview.col
-   preview.col=flr(rnd(4)+1)
+   preview.col=
+    ceil(rnd(#bub_col))
   end
  }
 end
@@ -134,6 +178,13 @@ end
 
 function to_pxl(x,y)
  return x*8,y*8
+end
+
+-- get next sprite
+function nxt(i,_min,_max)
+ i+=1
+ if (i>=_min and i<=_max) return i
+ return _min
 end
 
 -- board index to pixels
@@ -162,14 +213,77 @@ function clamp(val,max_v)
  return mid(-max_v,val,max_v)
 end
 
+function overlaps(a,b)
+ local ax2=a.x+a.w-1
+ local ay2=a.y+a.h-1
+ local bx2=b.x+b.w-1
+ local by2=b.y+b.h-1
+ -- no overlap if any true
+ return not (ax2<b.x
+          or a.x>bx2
+          or ay2<b.y
+          or a.y>by2)
+end
+
+-- true if any pixels overlap
+-- needs {sp,x,y,w,h}
+-- doesn't account for flip
+function pxl_overlap(a,b)
+ local offx=b.x-a.x
+ local offy=b.y-a.y
+ 
+ local rx1=a.x
+ local rx2=min(a.w+a.x,
+               b.w+b.x)-1
+ local ry1=a.y
+ local ry2=min(a.h+a.y,
+               b.h+b.y)-1
+ 
+ if offx>0 then
+  -- left b is left r
+  rx1=b.x
+  rx2=b.x+min(b.w,a.w-offx)-1
+ elseif offx<0 then
+  -- left a is left r
+  rx1=a.x
+  rx2=a.x+min(a.w,b.w+offx)-1
+ end
+ 
+ if offy>0 then
+  -- top of b is top r
+  ry1=b.y
+  ry2=b.y+min(b.h,a.h-offy)-1
+ elseif offy<0 then
+  -- top of a is top r
+  ry1=a.y
+  ry2=a.y+min(a.h,b.h+offy)-1
+ end
+ 
+ local aoffx=rx1-a.x
+ local aoffy=ry1-a.y
+ local boffx=rx1-b.x
+ local boffy=ry1-b.y
+ 
+ for x=0,(rx2-rx1) do
+  for y=0,(ry2-ry1) do
+   local pa=spget(a.sp,aoffx+x,aoffy+y)
+   local pb=spget(b.sp,boffx+x,boffy+y)
+   if pa>0 and pb>0 then
+    return true
+   end
+  end
+ end
+ 
+ return false
+end
 __gfx__
-000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc006666000000000000000000000000000000000000000000
-00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6061111600066660000000000000000000000000000000000
-0070070061171115cc66cc6667d6cc66cc66cc66000067d6ddddddddcc66cd76cc66cc66cc66cc66611711150611116000000000000000000000000000000000
-0007700061711115c66cc66c67dcc66cc66cc66c000067dcc66cc66cc66ccd76c66cc66cc66cc66c617111156117111500000000000000000000000000000000
-000770006111111566cc66cc67dc66cc66cc66cc000067dc66cc66cc66cc6d7666cc66cc66cc66cc611111156171111500000000000000000000000000000000
-00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6611111156111111500000000000000000000000000000000
-0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66061111500611115000000000000000000000000000000000
+000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc006666000000000000666600000000000000000000000000
+00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6061111600066660006111160000000000000000000000000
+0070070061171115cc66cc6667d6cc66cc66cc66000067d6ddddddddcc66cd76cc66cc66cc66cc66611711150611116061171115000000000000000000000000
+0007700061711115c66cc66c67dcc66cc66cc66c000067dcc66cc66cc66ccd76c66cc66cc66cc66c617111156117111561711115000000000000000000000000
+000770006111111566cc66cc67dc66cc66cc66cc000067dc66cc66cc66cc6d7666cc66cc66cc66cc611111156171111561111115000000000000000000000000
+00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6611111156111111506111150000000000000000000000000
+0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66061111500611115000555500000000000000000000000000
 0000000000555500c66cc66c67dcc66c66666666000067dcc66cc66cc66ccd76c66ccd7777dcc66c005555000055550000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000000000066cc6d7777dc66cc000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000006cc66cd77dc66cc6000000000000000000000000000000000000000000000000
