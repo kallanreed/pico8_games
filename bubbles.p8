@@ -4,45 +4,46 @@ __lua__
 -- bubble trouble
 -- by kallanreed
 
-bub_col={8,9,11,14}
 hi_score=0
 
-function starting_board()
- for i=1,20 do
-  board[i-1]=
-   ceil(rnd(#bub_col))
- end
-end
-
-function _init()
- music(0,0,7)
- pal()
- poke(0x5f2e,1)
-
- score=0
- top_off=8
+function start_level(i)
+ top_off=0
  shot_cnt=0
  shot_max=5
  in_flight=false
  board={}
- preview=bub(108,12,0,0,1)
- ●=bub(0,0,0,0,1)
- gun={
-  x1=48,y1=120,
-  x2=0,y2=0,
-  a=90,r=12,
-  ax=0,ay=0
- }
+
  part={}
  gen={}
  timer={}
  drawable={}
 
- starting_board()
+ set_level(i)
  update_gun()
  ●:reset()
  next_preview()
- 
+
+ add(drawable,
+  outlined(112,32,"lVL "..level,7,13))
+end
+
+function _init()
+ --music(0,0,7)
+ pal()
+ poke(0x5f2e,1)
+
+ score=0
+ level=1
+ gun={
+  x1=47,y1=120,
+  x2=0,y2=0,
+  a=90,r=12,
+  ax=0,ay=0
+ }
+ preview=bub(108,12,0,0,1)
+ ●=bub(0,0,0,0,1)
+
+ start_level(1) 
  temp_text(64,50," \#c\^t\^wbubble trouble",7)
  temp_text(64,64,"\#c ❎ - launch ",7)
  temp_text(64,72,"\#c 🅾️ - precise aim ",7)
@@ -104,7 +105,9 @@ function _draw()
  
  map(0,0,0,0,16,16)
  draw_top()
- spr(16,36,112,3,2)
+ draw_shots(0,82)
+
+ spr(16,36,112,3,2) --gun
 
  for k,v in pairs(board) do
   local x,y=b2px(k)
@@ -124,14 +127,22 @@ function _draw()
  --local dbgx,dbgy=b2px(dbgi)
  --rect(dbgx,dbgy,dbgx+7,dbgy+7,8)
  
- pal({[0]=129,1,2,3,4,5,6,7,8,9,10,139,12,13,140,132},1)
+ pal({[0]=129,1,2,3,4,5,6,7,
+  8,9,10,139,12,13,140,138},1)
+end
+
+function draw_shots(x,y)
+ for i=1,shot_max do
+  local sp=
+   _if(i>shot_cnt,10,11)
+  spr(sp,x,i*8+y)
+ end
 end
 
 function draw_top()
  local top=top_off-8
 
  if top>=0 then
-
   for i=0,top,8 do
    map(16,0,8,i,11,1)
   end
@@ -140,35 +151,51 @@ function draw_top()
  end
 end
 
---[[
-0 1 2 3 4 5
- 0 1 2 3 4 5
-0 1 2 3 4 5
+--[[ tile layout
+ 0 1 2 3 4 5 6 7 8 9
+  0 1 2 3 4 5 6 7 8 9
+ 0 1 2 3 4 5 6 7 8 9
 ]]
 
--- todo: consolidate neighbor collection
--- todo: collision sideways
-
-function get_up(i)
+function neighbors(i)
  local y=flr(i/10)
  local x=i%10
  local x2=x+1
- if (band(y,1)==0) x2=x-1
- y-=1
+ local offx=0
+ if (band(y,1)==0) offx=-1
  
- return y*10+x,y*10+x2
+ local at=function (_x,_y)
+  if _x<0 or _x>9 or _y<0 then
+   return nil
+  end
+  return _y*10+_x
+ end
+
+ local ns={
+  all={}
+ }
+ local add_n=function(k,v)
+  ns[k]=v
+   if (v) add(ns.all,v)
+ end
+
+ add_n("nw",at(x+offx,y-1))
+ add_n("ne",at(x2+offx,y-1))
+ add_n("w",at(x-1,y))
+ add_n("e",at(x+1,y))
+ add_n("sw",at(x+offx,y+1))
+ add_n("se",at(x2+offx,y+1))
+ 
+ return ns
 end
 
 function get_unrooted()
  local unrooted=keys(board)
  local visited={}
+ 
+ -- test all roots
  for i=0,9 do
-  if board[i]!=nil then
-   get_ur_rec(i,unrooted,visited)
-  end
-  if #unrooted<1 then
-   return {}
-  end
+  get_ur_rec(i,unrooted,visited)
  end
  return unrooted
 end
@@ -177,44 +204,20 @@ function get_ur_rec(i,u,v)
  -- already visited?
  if (count(v,i)>0) return
  add(v,i)
+ 
+ if (board[i]==nil) return
  del(u,i) -- reachable
 
- local y=flr(i/10)
- local x=i%10
- local x2=x+1
- if (band(y,1)==0) x2=x-1
- local worklist={}
- 
- local add_work=function(_x,_y)
-  if _x<0 or _x>10 or _y<0 then
-   return
-  end
-  local _i=_y*10+_x
-  if board[_i]!=nil then
-   add(worklist, _i)
-  end
- end
-
- -- up
- add_work(x,y-1)
- add_work(x2,y-1)
- -- down
- add_work(x,y+1)
- add_work(x2,y+1)
- -- l/r
- add_work(x-1,y)
- add_work(x+1,y)
- 
- for w in all(worklist) do
-  get_ur_rec(w,u,v)
+ local ns=neighbors(i)
+ for n in all(ns.all) do
+  get_ur_rec(n,u,v)
  end
 end
 
+-- get all connected matching
 function get_matching(i,col)
  local matches={}
- if board[i]==col then
-  get_mtch_rec(i,col,matches,{})
- end
+ get_mtch_rec(i,col,matches,{})
  return matches
 end
 
@@ -222,39 +225,17 @@ function get_mtch_rec(i,col,m,v)
  -- already visited?
  if (count(v,i)>0) return
  add(v,i)
+ 
+ if (board[i]!=col) return
  add(m,i)
-
- local y=flr(i/10)
- local x=i%10
- local x2=x+1
- if (band(y,1)==0) x2=x-1
- local worklist={}
  
- local add_work=function(_x,_y)
-  if _x<0 or _x>9 or _y<0 then
-   return
-  end
-  local _i=_y*10+_x
-  if board[_i]==col then
-   add(worklist, _i)
-  end
- end
-
- -- up
- add_work(x,y-1)
- add_work(x2,y-1)
- -- down
- add_work(x,y+1)
- add_work(x2,y+1)
- -- l/r
- add_work(x-1,y)
- add_work(x+1,y)
- 
- for w in all(worklist) do
-  get_mtch_rec(w,col,m,v)
+ local ns=neighbors(i)
+ for n in all(ns.all) do
+  get_mtch_rec(n,col,m,v)
  end
 end
 
+-- handle bubble placement
 function handle_bubble(i,col)
   board[i]=col
   local matches=
@@ -286,6 +267,7 @@ function handle_bubble(i,col)
   sfx(36)
   top_off+=8
   shot_cnt=0
+  camera_shake(.5)
  end
 end
 
@@ -321,20 +303,22 @@ function update_bubble(b)
  -- next board index
  local bi=px2b(nx+4,ny+4)
  
- -- test if the indexes above
- -- have bubbles already
- local tbi1,tbi2=get_up(bi)
- 
- local t1x,t1y=b2px(tbi1)
- local t2x,t2y=b2px(tbi2)
- 
- local hit_bubble=
-  (bub_overlap(nx,ny,t1x,t1y)
-   and board[tbi1] != nil) or
-  (bub_overlap(nx,ny,t2x,t2y)
-   and board[tbi2] != nil)
+ local ns=neighbors(bi)
+ local to_test={
+  ns.nw, ns.ne, ns.w, ns.e
+ }
+ local hit=false
+ for ti in all(to_test) do
+  if ti then
+   tx,ty=b2px(ti)
+   hit=
+    bub_overlap(nx,ny,tx,ty)
+    and board[ti]!=nil
+  end
+  if (hit) break
+ end
    
- if ny<=top_off or hit_bubble then
+ if ny<=top_off or hit then
   handle_bubble(bi,b.col)
   b:reset()
   next_preview()
@@ -395,6 +379,11 @@ function keys(tbl)
   add(_keys,k)
  end
  return _keys
+end
+
+function _if(c,vt,vf)
+ if (c) return vt
+ return vf
 end
 
 -- get next sprite
@@ -619,6 +608,23 @@ function text(x,y,txt,col)
  return it
 end
 
+function outlined(x,y,txt,col,col2)
+ local it=text(x,y,txt,col)
+ it.col2=col2 or 0
+ it.draw=function(my)
+  my:apply_mods()
+  for i=-1,1 do
+   for j=-1,1 do
+    print(my.txt,i+my.x+my.off_x,
+     j+my.y+my.off_y,my.col2)
+   end
+  end
+  print(my.txt,my.x+my.off_x,
+   my.y+my.off_y,my.col)
+ end
+ return it
+end
+
 -- timer
 
 function run_after(sec,fn)
@@ -646,23 +652,59 @@ function temp_text(x,y,txt,col)
  del_after(3,drawable,it)
  return it
 end
+
+function camera_shake(sec)
+ ani=0
+ done=t()+sec
+ return add(drawable,{
+  draw=function(my)
+   if t()-ani>.03 then
+    ani=t()
+    camera(ceil(rnd(2))-1,
+     ceil(rnd(2))-1)
+   end
+   if t()>done then
+    camera(0,0)
+    del(drawable,my)
+   end
+  end
+ })
+end
+-->8
+-- data
+
+function set_level(i)
+ board=levels[i]
+ for k,v in pairs(board) do
+  if (v==0) board[k]=nil
+ end
+end
+
+bub_col={8,9,11,14}
+-- red,yellow,green,blue
+
+levels={
+{[0]=0,0,0,1,1,2,2,0,0,0,
+      0,0,1,1,0,2,2,0,0,0,
+     0,0,0,3,3,3,3,0,0,0 }
+}
 __gfx__
-000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc006666000000000000666600000000000000000000000000
-00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6061111600066660006111160000000000000000000000000
-0070070061171115cc66cc6667d6cc66cc66cc66000067d6ddddddddcc66cd76cc66cc66cc66cc66611711150611116061771115000000000000000000000000
-0007700061711115c66cc66c67dcc66cc66cc66c000067dcc66cc66cc66ccd76c66cc66cc66cc66c617111156177111561111115000000000000000000000000
-000770006111111566cc66cc67dc66cc66cc66cc000067dc66cc66cc66cc6d7666cc66cc66cc66cc611111156111111561111115000000000000000000000000
-00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6611111156111111506111150000000000000000000000000
-0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66061111500611115000555500000000000000000000000000
-0000000000555500c66cc66c67dcc66c66666666000067dcc66cc66cc66ccd76c66ccd7777dcc66c005555000055550000000000000000000000000000000000
-000000000000000000000000000067dc0000000066cc67dc66cc67dc66cc66cc66cc6d7777dc66cc000000000000000000000000000000000000000000000000
-000000000000000000000000000067d6000000006cc667d66cc667d66cc66cc66cc66cd77dc66cc6000000000000000000000000000000000000000000000000
-000000000000000000000000000067d600000000cc6667d6cc6667d6cc66cc66cc66cc6ddc66cc66000000000000000000000000000000000000000000000000
-0000000000eeee0000000000000067dc00000000c66c67dcc66c67dcc66cc66cc66cc66cc66cc66c000000000000000000000000000000000000000000000000
-000000000ecccce000000000666067dc6660666066cc67dc66cc67dc66cc66cc66cc66cc66cc66cc000000000000000000000000000000000000000000000000
-00000000ec1111ce00000000000067d6000000006cc667d6dddd67d6dddddddd6cc66cc66cc66cc6000000000000000000000000000000000000000000000000
-0000000ec111111ce0000000000067d600000000cc6667d6777767d677777777cc66cc66cc66cc66000000000000000000000000000000000000000000000000
-000000ec11111111ce000000000067dc00000000c66c67dc666667dc66666666c66cc66cc66cc66c000000000000000000000000000000000000000000000000
+000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc0bb000000660000000000000000000000000000000000000
+00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6b7f300006765000000000000000000000000000000000000
+0070070061171115cc66cc6667d6cc66cc66cc66000067d6ddddddddcc66cd76cc66cc66cc66cc66bfb3000066d5000000000000000000000000000000000000
+0007700061711115c66cc66c67dcc66cc66cc66c000067dcc66cc66cc66ccd76c66cc66cc66cc66c133100001551000000000000000000000000000000000000
+000770006111111566cc66cc67dc66cc66cc66cc000067dc66cc66cc66cc6d7666cc66cc66cc66cc011000000110000000000000000000000000000000000000
+00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6000000000000000000000000000000000000000000000000
+0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66000000000000000000000000000000000000000000000000
+0000000000555500c66cc66c67dcc66c66666666000067dcc66cc66cc66ccd76c66ccd7777dcc66c000000000000000000000000000000000000000000000000
+000000000000000000000000000067dc0000000066cc67dc555567dc5555555566cc6d7777dc66cc056665d5d565665000000000000000000000000000000000
+000000000000000000000000000067d6000000006cc667d65d5d67d65d5d5d5d6cc66cd77dc66cc605665d5d5d56665000000000000000000000000000000000
+000000000000000000000000000067d600000000cc6667d665d567d665d565d5cc66cc6ddc66cc66056565d5d5d5665000000000000000000000000000000000
+0000000000eeee0000000000000067dc00000000c66c67dc565667dc56565656c66cc66cc66cc66c0566565d5d56565000000000000000000000000000000000
+000000000ecccce000000000666067dc6660666066cc67dc666667dc6666666666cc66cc66cc66cc056665d5d565665000000000000000000000000000000000
+00000000ec1111ce00000000000067d6000000006cc667d6555567d6555555556cc66cc66cc66cc605665d5d5d56665000000000000000000000000000000000
+0000000ec111111ce0000000000067d600000000cc6667d6565567d656555655cc66cc66cc66cc66056565d5d5d5665000000000000000000000000000000000
+000000ec11111111ce000000000067dc00000000c66c67dc555567dc55555555c66cc66cc66cc66c0566565d5d56565000000000000000000000000000000000
 00000ec111eeee111ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000ec11ce0000e111ce000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000ec111e000000e111ce00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -802,7 +844,7 @@ cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hsc11111116888851111111cshhhhhh1hhh1hhh1hhh1h
 c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhsc11111111555511111111cshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 
 __map__
-0700000000000000000000050804040902020202020202020202150000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0700000000000000000000050804040900001a1b00001a1b0000050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0700000000000000000000050700000317171717171717171717160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0700000000000000000000050700000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0700000000000000000000051806061900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
