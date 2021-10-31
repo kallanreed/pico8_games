@@ -4,64 +4,71 @@ __lua__
 -- bubble trouble
 -- by kallanreed
 
-hi_score=0
+-- todo: waay too many
+-- iterations over the board
 
-function start_level(i)
+hi_score=0
+hi_score_str=""
+music(0,0,7)
+
+function start_level()
  top_off=0
  shot_cnt=0
  shot_max=5
  in_flight=false
- board={}
 
- part={}
- gen={}
- timer={}
- drawable={}
-
- set_level(i)
+ set_level(level)
+ 
  update_gun()
+ next_preview()
  ●:reset()
  next_preview()
 
- add(drawable,
-  outlined(112,32,"lVL "..level,7,13))
+ del(drawable,level_text)
+ level_text=add(drawable,
+  outlined(112,32,
+   "lVL "..level,7,13))
 end
 
 function _init()
- --music(0,0,7)
  pal()
  poke(0x5f2e,1)
 
+ game_over=false
  score=0
  level=1
+ level_text=nil
+ board={}
  gun={
-  x1=47,y1=120,
+  x1=48,y1=120,
   x2=0,y2=0,
   a=90,r=12,
   ax=0,ay=0
  }
  preview=bub(108,12,0,0,1)
  ●=bub(0,0,0,0,1)
+ 
+ part={}
+ gen={}
+ timer={}
+ drawable={}
 
- start_level(1) 
  temp_text(64,50," \#c\^t\^wbubble trouble",7)
  temp_text(64,64,"\#c ❎ - launch ",7)
  temp_text(64,72,"\#c 🅾️ - precise aim ",7)
+
+ start_level()
 end
 
-function update_gun()
- gun.a=mid(20,gun.a,160)
- 
- local a=gun.a/360
- gun.ax=cos(a)
- gun.ay=sin(a)
- gun.x2=gun.ax*gun.r+gun.x1
- gun.y2=gun.ay*gun.r+gun.y1
-end
+-- main update
 
 function _update()
- local incr=5
- if (btn(🅾️)) incr=1
+ if game_over then
+  if (btnp(❎)) _init()
+  return
+ end
+
+ local incr=_if(btn(🅾️),1,5)
 
  if btn(⬆️) then
   gun.a=90
@@ -81,8 +88,8 @@ function _update()
   sfx(32)
   shot_cnt+=1
   in_flight=true
-  ●.dx=gun.ax*3
-  ●.dy=gun.ay*3
+  ●.dx=gun.ax*4
+  ●.dy=gun.ay*4
  end
 
  ●:update()
@@ -90,13 +97,50 @@ function _update()
  foreach(gen, do_update)
  foreach(timer, do_update)
  update_particles()
+ 
+  -- test for win
+ if not next(board) then
+  -- no bubbles left, advance
+  sfx(37)
+  explode(48,24,{8,9,10})
+  camera_shake(.3)
+  level+=1
+  start_level()
+  return
+ end
+ 
+ -- test for lose
+ local mk=max_key(board)
+ local off_y=top_off/8
+ if flr(mk/10)+off_y>12 then
+  sfx(38)
+  camera_shake(.3)
+  game_over=true
+  hi_score=max(score,hi_score)
+  hi_score_str=fmt_score(hi_score)
+ end
 end
+
+function update_gun()
+ gun.a=mid(20,gun.a,160)
+ 
+ local a=gun.a/360
+ gun.ax=cos(a)
+ gun.ay=sin(a)
+ gun.x2=gun.ax*gun.r+gun.x1
+ gun.y2=gun.ay*gun.r+gun.y1
+end
+
+
+-- main draw
 
 function _draw()
  cls()
+ 
+ -- checker board
  for i=0,63 do
   local x,y=i%8,flr(i/8)
-  
+
   local col=band(i+y,1)
   fillp(∧)
   rectfill(x*16,y*16,x*16+16,y*16+16,col)
@@ -104,10 +148,13 @@ function _draw()
  end 
  
  map(0,0,0,0,16,16)
- draw_top()
+ draw_pusher()
  draw_shots(0,82)
+ draw_score(100,42)
 
  spr(16,36,112,3,2) --gun
+ spr(12,60,113,3,3)
+
 
  for k,v in pairs(board) do
   local x,y=b2px(k)
@@ -122,13 +169,19 @@ function _draw()
 
  line(gun.x1,gun.y1,
   gun.x2,gun.y2,12)
- 
- --local dbgi=px2b(●.x+4,●.y+4)
- --local dbgx,dbgy=b2px(dbgi)
- --rect(dbgx,dbgy,dbgx+7,dbgy+7,8)
+  
+ if game_over then
+  draw_game_over()
+  return
+ end
  
  pal({[0]=129,1,2,3,4,5,6,7,
   8,9,10,139,12,13,140,138},1)
+end
+
+function draw_score(x,y)
+ local s=fmt_score(score)
+ draw_outlined(x,y,s,7,13)
 end
 
 function draw_shots(x,y)
@@ -139,7 +192,7 @@ function draw_shots(x,y)
  end
 end
 
-function draw_top()
+function draw_pusher()
  local top=top_off-8
 
  if top>=0 then
@@ -151,43 +204,16 @@ function draw_top()
  end
 end
 
---[[ tile layout
- 0 1 2 3 4 5 6 7 8 9
-  0 1 2 3 4 5 6 7 8 9
- 0 1 2 3 4 5 6 7 8 9
-]]
-
-function neighbors(i)
- local y=flr(i/10)
- local x=i%10
- local x2=x+1
- local offx=0
- if (band(y,1)==0) offx=-1
- 
- local at=function (_x,_y)
-  if _x<0 or _x>9 or _y<0 then
-   return nil
-  end
-  return _y*10+_x
- end
-
- local ns={
-  all={}
- }
- local add_n=function(k,v)
-  ns[k]=v
-   if (v) add(ns.all,v)
- end
-
- add_n("nw",at(x+offx,y-1))
- add_n("ne",at(x2+offx,y-1))
- add_n("w",at(x-1,y))
- add_n("e",at(x+1,y))
- add_n("sw",at(x+offx,y+1))
- add_n("se",at(x2+offx,y+1))
- 
- return ns
+function draw_game_over()
+ text(48,32,"\#0❎ to restart",7):draw()
+ text(48,40,"\#0high score",7):draw()
+ text(48,47,"\#0"..hi_score_str,7):draw()
+ pal({[0]=0,0,0,5,5,5,6,7,6,
+          6,7,6,7,6,5,6},1)
 end
+
+
+-- board traversal
 
 function get_unrooted()
  local unrooted=keys(board)
@@ -236,24 +262,38 @@ function get_mtch_rec(i,col,m,v)
 end
 
 -- handle bubble placement
-function handle_bubble(i,col)
+function place_bubble(i,col)
   board[i]=col
   local matches=
    get_matching(i,col)
 
+  -- bubble removal
   if #matches>2 then
-   sfx(35) -- fall   
+   sfx(35) -- fall
+   local multi=1
    -- matching bubbles
    for m in all(matches) do
     local x,y=b2px(m)
+    local s=10*multi
+    local c=bub_col[col]
+    score_float(x,y,c,s)
+    score+=s
+    multi+=0.1
+    
     bub_fall(x,y,col)
     board[m]=nil
    end
-   
+
    -- unrooted bubbles
    local unrooted=get_unrooted()
    for u in all(unrooted) do
     local x,y=b2px(u)
+    local s=10*multi
+    local c=bub_col[board[u]]
+    score_float(x,y,c,s)
+    score+=s
+    multi+=0.1
+    
     bub_fall(x,y,board[u])
     board[u]=nil
    end
@@ -271,23 +311,6 @@ function handle_bubble(i,col)
  end
 end
 
-function next_preview()
- -- todo: too expensive 
- local k=keys(board)
- preview.col=board[rnd(k)]
-end
-
--- test if 2 bubbles with the
--- specified coords overlap
-function bub_overlap(ax,ay,bx,by)
- 
- local a={sp=1,x=ax,y=ay,w=8,h=8}
- local b={sp=1,x=bx,y=by,w=8,h=8}
- 
- return overlaps(a,b)
-  and pxl_overlap(a,b)
-end
-
 function update_bubble(b)
  -- next position
  local nx=b.x+b.dx
@@ -303,13 +326,23 @@ function update_bubble(b)
  -- next board index
  local bi=px2b(nx+4,ny+4)
  
+ -- prevent overlap
+ -- todo: bounds
+ while board[bi]!=nil do
+  nx-=b.dx/2
+  ny-=b.dy/2
+  bi=px2b(nx+4,ny+4)
+ end
+ 
+ -- test if collision
  local ns=neighbors(bi)
  local to_test={
   ns.nw, ns.ne, ns.w, ns.e
  }
+ 
  local hit=false
  for ti in all(to_test) do
-  if ti then
+  if ti!=nil then
    tx,ty=b2px(ti)
    hit=
     bub_overlap(nx,ny,tx,ty)
@@ -317,9 +350,11 @@ function update_bubble(b)
   end
   if (hit) break
  end
-   
+
+ -- place bubble if it hits the
+ -- top or another bubble
  if ny<=top_off or hit then
-  handle_bubble(bi,b.col)
+  place_bubble(bi,b.col)
   b:reset()
   next_preview()
   return
@@ -338,13 +373,13 @@ end
 function bub(x,y,dx,dy,col)
  return {
   x=x,y=y,dx=dx,dy=dy,col=col,
-  
+
   update=update_bubble,
-  
+
   draw=function(my)
    draw_bubble(my.x,my.y,my.col)
   end,
-  
+
   reset=function(my)
    my.x=gun.x1-4
    my.y=gun.y1
@@ -355,6 +390,12 @@ function bub(x,y,dx,dy,col)
  }
 end
 
+function next_preview()
+ if (not board) return
+ -- todo: too expensive
+ local k=keys(board)
+ preview.col=board[rnd(k)]
+end
 -->8
 -- utils
 function do_update(o)
@@ -381,9 +422,26 @@ function keys(tbl)
  return _keys
 end
 
+function max_key(tbl)
+ local mx=nil
+ for k,_ in pairs(tbl) do
+  mx=max(k,mx)
+ end
+ return mx
+end
+
+-- in lieu of conditional
 function _if(c,vt,vf)
  if (c) return vt
  return vf
+end
+
+function fmt_score(s)
+ local score_str=tostr(flr(s))
+ while #score_str<6 do
+  score_str="0"..score_str
+ end
+ return score_str
 end
 
 -- get next sprite
@@ -400,7 +458,6 @@ function b2px(i)
  local offx=8 -- l edge
 
  if (band(y,1)==1) offx+=4
-
  return x*8+offx,y*8+top_off
 end
 
@@ -411,7 +468,6 @@ function px2b(x,y)
  
  if (band(y,1)==1) offx-=4
  local x=flr((x+offx)/8)
- 
  return y*10+x
 end
 
@@ -426,6 +482,15 @@ function map_rng(v,
  local d_out=max_out-min_out
  return (v-min_in)/d_in*
          d_out+min_out
+end
+
+-- test if 2 bubbles with the
+-- specified coords overlap
+function bub_overlap(ax,ay,bx,by)
+ local a={sp=1,x=ax,y=ay,w=8,h=8}
+ local b={sp=1,x=bx,y=by,w=8,h=8}
+ return overlaps(a,b)
+  and pxl_overlap(a,b)
 end
 
 function overlaps(a,b)
@@ -497,21 +562,64 @@ function spget(sp,x,y)
  local sy=flr(sp/16)*8
  return sget(sx+x,sy+y)
 end
+
+--[[ tile layout
+ 0 1 2 3 4 5 6 7 8 9
+  0 1 2 3 4 5 6 7 8 9
+ 0 1 2 3 4 5 6 7 8 9
+]]
+
+function neighbors(i)
+ local y=flr(i/10)
+ local x=i%10
+ local x2=x+1
+ local offx=
+  _if(band(y,1)==1,0,-1)
+ 
+ local at=function (_x,_y)
+  if _x<0 or _x>9 or _y<0 then
+   return nil
+  end
+  return _y*10+_x
+ end
+
+ local ns={all={}}
+ local add_n=function(k,v)
+  ns[k]=v
+  if (v) add(ns.all,v)
+ end
+
+ add_n("nw",at(x+offx,y-1))
+ add_n("ne",at(x2+offx,y-1))
+ add_n("w",at(x-1,y))
+ add_n("e",at(x+1,y))
+ add_n("sw",at(x+offx,y+1))
+ add_n("se",at(x2+offx,y+1))
+ 
+ return ns
+end
 -->8
 -- particles
 
-function explode(x,y,col)
- for i=0,30 do
+function explode(x,y,cols)
+ for i=0,60 do
   local p=particle(
-   x,y,
-   cos(rnd()),
-   sin(rnd()),
-   rnd(8)+8,col)
+   x+cos(rnd()),
+   y+cos(rnd()),
+   cos(rnd())*3,
+   sin(rnd())*3-.1,
+   rnd(10)+30,rnd(cols))
   p.update=function(my)
-   my.dx*=.9
-   my.dy+=.1
+   my.dx*=.95
+   my.dy+=.05
+   if my.age>my.mxage*.8 then
+    my.col=5
+   end
   end
-    
+  p.draw=function(my)
+   circfill(my.x,my.y,1,my.col)
+  end
+
   add(part,p)
  end
 end
@@ -528,7 +636,24 @@ function bub_fall(x,y,col)
  p.draw=function(my)
   draw_bubble(my.x,my.y,my.col)
  end
-   
+
+ add(part,p)
+end
+
+function score_float(x,y,col,score)
+ local p=particle(
+  x,y,
+  cos(rnd()),-.2,
+  rnd(5)+8,col)
+ p.s=tostr(flr(score))
+ p.update=function(my)
+  my.dx*=.8
+ end
+ p.draw=function(my)
+  draw_outlined(my.x,my.y,
+   my.s,my.col,1)
+ end
+
  add(part,p)
 end
 
@@ -547,11 +672,11 @@ function update_particles()
  -- reverse iter for easy delete
  for i=#part,1,-1 do
   local p=part[i]
-  
+
   p.age+=1
   if p.age>p.mxage then
    deli(part,i)
-   
+
   else
    if (p.update) p:update()
    p.x+=p.dx
@@ -579,7 +704,7 @@ function drawable_item(x,y)
   x=x, y=y,
   off_x=0, off_y=0,
   mods={},
-  
+
   apply_mods=function(my)
    for m in all(my.mods) do
     m(my)
@@ -608,19 +733,23 @@ function text(x,y,txt,col)
  return it
 end
 
+function draw_outlined(
+ x,y,txt,col,outline_col)
+ for i=-1,1 do
+  for j=-1,1 do
+   print(txt,i+x,j+y,outline_col)
+  end
+ end
+ print(txt,x,y,col)
+end
+
 function outlined(x,y,txt,col,col2)
  local it=text(x,y,txt,col)
  it.col2=col2 or 0
  it.draw=function(my)
   my:apply_mods()
-  for i=-1,1 do
-   for j=-1,1 do
-    print(my.txt,i+my.x+my.off_x,
-     j+my.y+my.off_y,my.col2)
-   end
-  end
-  print(my.txt,my.x+my.off_x,
-   my.y+my.off_y,my.col)
+  draw_outlined(my.x+my.off_x,
+   my.y+my.off_y,my.txt,my.col,my.col2)
  end
  return it
 end
@@ -674,39 +803,65 @@ end
 -- data
 
 function set_level(i)
- board=levels[i]
- for k,v in pairs(board) do
-  if (v==0) board[k]=nil
+ board={}
+ local l=levels[i]
+ 
+ if not l then
+  local bubs=min(10*flr(i/5),70)
+  random_level(bubs)
+  return
+ end
+ 
+ for k,v in pairs(levels[i]) do
+  board[k]=_if(v>0,v,nil)
  end
 end
 
 bub_col={8,9,11,14}
 -- red,yellow,green,blue
 
+function random_level(n)
+ for i=0,(n-1) do
+  board[i]=ceil(rnd(4))
+ end
+end
+
 levels={
+-- 1-10
+{[0]=0,0,0,0,4,4,0,0,0,0,
+      0,0,0,4,4,4,0,0,0,0},
+{[0]=1,1,1,1,0,0,2,2,2,2},
 {[0]=0,0,0,1,1,2,2,0,0,0,
       0,0,1,1,0,2,2,0,0,0,
-     0,0,0,3,3,3,3,0,0,0 }
+     0,0,0,3,3,3,3,0,0,0},
+{[0]=0,0,3,1,4,4,1,3,0,0,
+      0,0,3,1,4,1,3,0,0,0,
+     0,0,0,2,2,2,2,0,0,0},
+{[0]=1,1,3,0,2,2,0,0,4,2,
+      1,2,0,3,4,3,0,3,2,2,
+     2,3,0,0,1,1,0,0,4,3}    
 }
+-->8
+-- items
 __gfx__
 000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc0bb000000660000000000000000000000000000000000000
 00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6b7f300006765000000000000000000000000000000000000
 0070070061171115cc66cc6667d6cc66cc66cc66000067d6ddddddddcc66cd76cc66cc66cc66cc66bfb3000066d5000000000000000000000000000000000000
-0007700061711115c66cc66c67dcc66cc66cc66c000067dcc66cc66cc66ccd76c66cc66cc66cc66c133100001551000000000000000000000000000000000000
-000770006111111566cc66cc67dc66cc66cc66cc000067dc66cc66cc66cc6d7666cc66cc66cc66cc011000000110000000000000000000000000000000000000
-00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6000000000000000000000000000000000000000000000000
-0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66000000000000000000000000000000000000000000000000
-0000000000555500c66cc66c67dcc66c66666666000067dcc66cc66cc66ccd76c66ccd7777dcc66c000000000000000000000000000000000000000000000000
-000000000000000000000000000067dc0000000066cc67dc555567dc5555555566cc6d7777dc66cc056665d5d565665000000000000000000000000000000000
-000000000000000000000000000067d6000000006cc667d65d5d67d65d5d5d5d6cc66cd77dc66cc605665d5d5d56665000000000000000000000000000000000
-000000000000000000000000000067d600000000cc6667d665d567d665d565d5cc66cc6ddc66cc66056565d5d5d5665000000000000000000000000000000000
-0000000000eeee0000000000000067dc00000000c66c67dc565667dc56565656c66cc66cc66cc66c0566565d5d56565000000000000000000000000000000000
-000000000ecccce000000000666067dc6660666066cc67dc666667dc6666666666cc66cc66cc66cc056665d5d565665000000000000000000000000000000000
-00000000ec1111ce00000000000067d6000000006cc667d6555567d6555555556cc66cc66cc66cc605665d5d5d56665000000000000000000000000000000000
-0000000ec111111ce0000000000067d600000000cc6667d6565567d656555655cc66cc66cc66cc66056565d5d5d5665000000000000000000000000000000000
+0007700061711115c66cc66c67dcc66cc66cc66c000067dcc66cc66cc66ccd76c66cc66cc66cc66c133100001551000000000555550000000000000000000000
+000770006111111566cc66cc67dc66cc66cc66cc000067dc66cc66cc66cc6d7666cc66cc66cc66cc011000000110000000055555555500000000000000000000
+00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6000000000000000000557775777550000000000000000000
+0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66000000000000000000577777777750000000000000000000
+0000000000555500c66cc66c67dcc66c66666666000067dcc66cc66cc66ccd76c66ccd7777dcc66c000000000000000005775777775775000000000000000000
+000000000000000000000000000067dc0000000066cc67dc555567dc5555555566cc6d7777dc66cc056665d5d5656650057757a9a75775000000000000000000
+000000000000000000000000000067d6000000006cc667d65d5d67d65d5d5d5d6cc66cd77dc66cc605665d5d5d5666500577a799a7a775000000000000000000
+000000000000000000000000000067d600000000cc6667d665d567d665d565d5cc66cc6ddc66cc66056565d5d5d5665055677777777765500000000000000000
+0000000000eeee0000000000000067dc00000000c66c67dc565667dc56565656c66cc66cc66cc66c0566565d5d56565055567777777655500000000000000000
+000000000ecccce000000000666067dc6660666066cc67dc666667dc6666666666cc66cc66cc66cc056665d5d565665005557777777555000000000000000000
+00000000ec1111ce00000000000067d6000000006cc667d6555567d6555555556cc66cc66cc66cc605665d5d5d56665000055677765500000000000000000000
+0000000ec111111ce0000000000067d600000000cc6667d6565567d656555655cc66cc66cc66cc66056565d5d5d5665000099555559900000000000000000000
 000000ec11111111ce000000000067dc00000000c66c67dc555567dc55555555c66cc66cc66cc66c0566565d5d56565000000000000000000000000000000000
 00000ec111eeee111ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000ec11ce0000e111ce000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000ec111e0000e111ce000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000ec111e000000e111ce00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00ec1111e000000e1111ce0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0ec11111e000000e11111ce000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -714,30 +869,30 @@ ec111111e000000e111111ce00000000000000000000000000000000000000000000000000000000
 ec1111111e0000e1111111ce00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 ec11111111eeee11111111ce00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __label__
-66cc6d7666cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d766cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc667d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc6667d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76c66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66c67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d7666cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc66cc67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd67d66cc66ccddddddddddddddddddcc66cc6
-cc66cd7677777777777777777777777777777777777777777777777777777777777777777777777777777777777767d6cc66ccd777777777777777777d66cc66
-c66ccd7666666666666666666666666666666666666666666666666666666666666666666666666666666666666667dcc66ccd77666666666666666677dcc66c
-66cc6d76hh6666hh1h6666hh1h6666hhhh6666hhhh6666hh1h6666hh1h6666hhhh6666hhhh6666hh1h6666hh1hhh67dc66cc6d76hhhhhhhh1hhh1hhh67dc66cc
-6cc66d76h688886hh6999961h6ssss61h6ssss6hh6rrrr6hh6888861h6999961h6ssss6hh688886hh6ssss61h1h167d66cc66d76hhhhhhhhh1h1h1h167d66cc6
-cc66cd7668878885699799956ss7sss56ss7sss56rr7rrr568878885699799956ss7sss5688788856ss7sss5hh1h67d6cc66cd76hhhhhhhhhh1hhh1h67d6cc66
-c66ccd7668788885697999956s7ssss56s7ssss56r7rrrr568788885697999956s7ssss5687888856s7ssss5hhhh67dcc66ccd76hhhhhhhhhhhhhhhh67dcc66c
-66cc6d7668888885699999956ssssss56ssssss56rrrrrr568888885699999956ssssss5688888856ssssss51hhh67dc66cc6d76hhhhhh6666hh1hhh67dc66cc
-6cc66d7668888885699999956ssssss56ssssss56rrrrrr568888885699999956ssssss5688888856ssssss5h1h167d66cc66d76hhhhh6ssss61h1h167d66cc6
-cc66cd76h688885hh699995hh6ssss5hh6ssss5hh6rrrr5hh688885hh699995hh6ssss5hh688885hh6ssss5hhh1h67d6cc66cd76hhhh6ss7sss5hh1h67d6cc66
-c66ccd76hh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhhhh67dcc66ccd76hhhh6s7ssss5hhhh67dcc66c
-66cc6d761hhh1h6666hhhh6666hhhh6666hh1h6666hh1h6666hhhh6666hhhh6666hh1h6666hh1h6666hhhh6666hh67dc66cc6d761hhh6ssssss5hhhh67dc66cc
-6cc66d76h1h1h6ssss6hh688886hh6888861h6888861h699996hh699996hh6ssss61h6ssss61h6ssss6hh6ssss6h67d66cc66d76h1h16ssssss5hhhh67d66cc6
-cc66cd76hh1h6ss7sss568878885688788856887888569979995699799956ss7sss56ss7sss56ss7sss56ss7sss567d6cc66cd76hh1hh6ssss5hhhhh67d6cc66
-c66ccd76hhhh6s7ssss568788885687888856878888569799995697999956s7ssss56s7ssss56s7ssss56s7ssss567dcc66ccd76hhhhhh5555hhhhhh67dcc66c
-66cc6d761hhh6ssssss568888885688888856888888569999995699999956ssssss56ssssss56ssssss56ssssss567dc66cc6d761hhh1hhhhhhhhhhh67dc66cc
-6cc66d76h1h16ssssss568888885688888856888888569999995699999956ssssss56ssssss56ssssss56ssssss567d66cc66d76h1h1h1h1hhhhhhhh67d66cc6
-cc66cd76hh1hh6ssss5hh688885hh688885hh688885hh699995hh699995hh6ssss5hh6ssss5hh6ssss5hh6ssss5h67d6cc66cd76hh1hhh1hhhhhhhhh67d6cc66
-c66ccd76hhhhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hhhh5555hh67dcc66ccd76hhhhhhhhhhhhhhhh67dcc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh6666hh1h6666hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhh6ssss6hh6ssss61h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhh6ss7sss56ss7sss5hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh6s7ssss56s7ssss5hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhh6ssssss56ssssss51hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhh6ssssss56ssssss5h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66ccddddddddddddddddddcc66cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhh6ssss5hh6ssss5hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66ccd777777777777777777d66cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh5555hhhh5555hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccd77666666666666666677dcc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhh6666hhhh6666hh1h6666hh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc6d76hhhhhhhh1hhh1hhh67dc66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhh6ssss6hh6ssss61h6ssss61h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66d76hhhhhhhhh1h1h1h167d66cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhh6ss7sss56ss7sss56ss7sss5hh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cd76hhhhhhhhhh1hhh1h67d6cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhh6s7ssss56s7ssss56s7ssss5hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccd76hhhhhhhhhhhhhhhh67dcc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhh6ssssss56ssssss56ssssss51hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc6d76hhhhhh6666hh1hhh67dc66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhh6ssssss56ssssss56ssssss5h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66d76hhhhh6ssss61h1h167d66cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhh6ssss5hh6ssss5hh6ssss5hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cd76hhhh6ss7sss5hh1h67d6cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh5555hhhh5555hhhh5555hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccd76hhhh6s7ssss5hhhh67dcc66c
+66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc6d761hhh6ssssss5hhhh67dc66cc
+6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66d76h1h16ssssss5hhhh67d66cc6
+cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cd76hh1hh6ssss5hhhhh67d6cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccd76hhhhhh5555hhhhhh67dcc66c
+66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc6d761hhh1hhhhhhhhhhh67dc66cc
+6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66d76h1h1h1h1hhhhhhhh67d66cc6
+cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cd76hh1hhh1hhhhhhhhh67d6cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccd76hhhhhhhhhhhhhhhh67dcc66c
 66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc6d77666666666666666677dc66cc
 6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cd777777777777777777dc66cc6
 cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc6ddddddddddddddddddc66cc66
@@ -745,23 +900,23 @@ c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
 66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
 6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
 cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccdddc66cc66cc66ccdddd66cc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc6d7d6ddddddd66cc6d77d6cc66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66d7d6d7d7d7d6cc66dd7dcc66cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cd7dcd7d7d7dcc66ccd7dc66cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66ccd7ddd777d7ddd6ccdd7dd6cc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc6d777dd7ddd77dcc6d777dcc66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66ddddddddcddddc66dddddc66cc6
 cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
 c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66ccddddddddddddddddddddddddd6cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc6d777d777d777d777d777d777dcc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66d7d7d7d7d7d7d7d7d7d7d7d7dc66c
+66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cd7d7d7d7d7d7d7d7d7d7d7d7d66cc
+6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66ccd7d7d7d7d7d7d7d7d7d7d7d7d6cc6
+cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc6d777d777d777d777d777d777dcc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66dddddddddddddddddddddddddc66c
 66cc6d76cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc66cc
 6cc66d76ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc66cc6
 cc66cd76cc777777cc77cc77cc777777cc777777cc77cccccc777777cccccccccc777777cc777777cccc7777cc77cc77cc777777cc77cccccc777777cc66cc66
@@ -804,44 +959,44 @@ cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1h
 c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
 6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
+crr6cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
+r7q3cd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+rqr36d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+13316d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
+c116cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
 c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
 6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
+crr6cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
+r7q3cd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+rqr36d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+13316d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
+c116cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
 c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 66cc6d76hhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
 6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d76666h666h666h666h666h666h666h666h666h666hc66h666h666h666h666h666h666h666h666h666h666h67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhc1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhch1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
+crr6cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
+r7q3cd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+rqr36d76666h666h666h666h666h666h666h666h666h666hc66h666h666h666h666h666h666h666h666h666h666h67dc66cc66cc66cc66cc66cc66cc66cc66cc
+13316d76hhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhc1h1h1h1h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h167d66cc66cc66cc66cc66cc66cc66cc66cc6
+c116cd76hhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhch1hhh1hhh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1h67d6cc66cc66cc66cc66cc66cc66cc66cc66
 c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhchhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhchhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
 6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1chhhhhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hchhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhsscshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1sccccshhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1sc11c1cshhhhhhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1sc111c11cshhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhsc1111c111cshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1sc11166c6111cshhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1sc11c688886111cshhhhhhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1sc11168878885111cshhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhsc1111687888851111cshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
-66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1sc111116888888511111cshhhhh1hhh1hhh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
-6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1sc11111168888885111111cshhhhh1h1h1h1h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
-cc66cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hsc11111116888851111111cshhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
-c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhsc11111111555511111111cshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+crr6cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hchhhhhhhhhhhhhhhhh1hhh1hhh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
+r7q3cd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhsscshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+rqr36d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1hhh1sccccshhhhhhhhhhhhh155555hh1hhh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+13316d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1h1h1sc11c1cshhhhhhhhhhh555555555h1h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
+c116cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1sc111c11cshhhhhhhhh55777577755h1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhsc1111c111cshhhhhhhh57777777775hhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+66cc6d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1hhh1sc11166c6111cshhhhhh5775777775775hh1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+6cc66d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1h1h1sc1116ssss6111cshhhhh57757a9a75775h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
+crr6cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hhh1sc1116ss7sss5111cshhhh577a799a7a7751hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
+r7q3cd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhsc11116s7ssss51111cshh556777777777655hhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
+rqr36d761hhh1hhhhhhhhhhhhhhhhhhh1hhh1sc111116ssssss511111csh555677777776555h1hhhhhhhhhhhhhhh67dc66cc66cc66cc66cc66cc66cc66cc66cc
+13316d76h1h1h1h1hhhhhhhhhhhhhhhhh1h1sc1111116ssssss5111111csh5557777777555h1h1h1hhhhhhhhhhhh67d66cc66cc66cc66cc66cc66cc66cc66cc6
+c116cd76hh1hhh1hhhhhhhhhhhhhhhhhhh1hsc11111116ssss51111111cshhh556777655hh1hhh1hhhhhhhhhhhhh67d6cc66cc66cc66cc66cc66cc66cc66cc66
+c66ccd76hhhhhhhhhhhhhhhhhhhhhhhhhhhhsc11111111555511111111cshhh995555599hhhhhhhhhhhhhhhhhhhh67dcc66cc66cc66cc66cc66cc66cc66cc66c
 
 __map__
 0700000000000000000000050804040900001a1b00001a1b0000050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -893,11 +1048,13 @@ __sfx__
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-010600002d0302b031210210b01100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+4906000028020230211c0210402100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010400001375213742007020070200702007020070200702007020070200702007020070200702007020070200702007020070200702007020070200702007020070200702007020070200702007020070200702
 01020000190401c041230313401100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000900001f8401e8401c8401a83018820178100080000800008000080000800008000080000800008000080000800008000080000800008000080000800008000080000800008000080000800008000080000800
 0104000000433004451164012630126301163011630106200f6100e6100c600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+491000001312500100131251a1301a135001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100
+010b00002b05528055230551f0551c055130550433500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005
 __music__
 01 08090a44
 00 08090b44
