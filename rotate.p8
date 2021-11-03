@@ -7,9 +7,9 @@ function _init()
 end
 
 function _update()
- --a=(a+1)%360
- if (btn(⬅️)) a=(a+1)%360
- if (btn(➡️)) a=(a-1)%360
+ a=(a+1)%360
+ --if (btn(⬅️)) a=(a+1)%360
+ --if (btn(➡️)) a=(a-1)%360
 end
 
 function rotate(x,y,cx,cy,a)
@@ -57,8 +57,141 @@ function _draw()
   tline(rx1,ry1,rx2,ry2,3,(i-1)/8)
  end
  
+ draw_tile(20,20,1,0,a/360)
+ draw_rotated_tile(
+  40,20,a/360,1,0,1)
+  
+ draw_tile2(60,20,1,0,a/360)
+ 
  print(ca..","..sa.." "..a)
 end
+
+function draw_tile(x,y,tx,ty,ang)
+ local cos_a,sin_a=cos(ang),sin(ang)
+ local x1,x2=-4,4
+
+ for off_y=-4,4 do
+  local _y=off_y
+  tline(x+x1*cos_a-sin_a*_y,
+        y+x1*sin_a+cos_a*_y,
+        x+x2*cos_a-sin_a*_y,
+        y+x2*sin_a+cos_a*_y,
+        tx,(ty+4)/8)
+ end
+end
+
+function draw_tile2(x,y,tx,ty,ang)
+ local cos_a,sin_a=cos(ang),sin(ang)
+ 
+ -- the draw box needs to be
+ -- able to hold the rotated
+ -- square which is srqt(2) 
+ -- from corner to corner
+ local w=8*sqrt(2)
+ local half=w/2
+ local x1,y1,x2,y2=
+  -half,-half,half,half
+  
+ -- source box also needs to
+ -- include diagonals so it
+ -- needs to have r=sqrt(2)/2
+ local moff=sqrt(2)/2
+ 
+ -- center of the tile is
+ -- is just .5 from the corner
+ local ctx,cty=tx+.5,ty+.5
+ 
+ -- step is the y coord on the
+ -- map tile, range -moff,moff
+ local step=-moff
+ 
+ -- x col vect, left side
+ local cosx=cos_a*-moff
+ local sinx=sin_a*-moff
+
+ for _y=y1,y2 do
+  local siny=sin_a*step
+  local cosy=cos_a*step
+  tline(x+x1,y+_y,
+        x+x2,y+_y,
+        ctx+cosx-siny,
+        cty+sinx+cosy,
+        -- map mdx,mdy to
+        -- output size w
+        -- considering moff
+        cos_a*1.6/w,
+        sin_a*1.6/w)
+  -- map output range to tile
+  step+=(2*moff)/w
+  printh(step)
+ end
+ 
+ rect(x+x1,y+y1,x+x2,y+y2,6)
+end
+
+function draw_rotated_tile(
+ x,y,rot,mx,my,w)
+  w+=.8 --???
+  local halfw=-w/2 --? why neg
+  --cx/cy center
+  local cx, cy=
+   mx-halfw-.4, my-halfw-.4
+   
+  -- pre-calc'd cos/sin
+  local cr, sr=
+   cos(rot), sin(rot)
+   
+  -- rotated values?
+  -- center circle values
+  -- these are the x comps
+  -- of the column vector and
+  -- won't change so are pre-
+  -- computed.
+  local rx, ry=
+    cx+cr*halfw, cy+sr*halfw
+    
+  -- ??
+  local hx, hy=w*4, w*4
+  
+  rect(x-hx,y-hy,x+hx,y+hy,5)
+
+  -- weird, instead rotating
+  -- the lines, it's rotating
+  -- the way the source is read
+  for py=y-hy,y+hy do
+    tline(x-hx,py,
+          x+hx,py,
+          rx-sr*halfw,
+          ry+cr*halfw,
+          -- scale the step to
+          -- the output line
+          -- length of 8?
+          cr/8, sr/8)
+    
+    -- this varies the y comp
+    -- of the coumn vector of
+    -- each line end
+    halfw+=1/8
+  end
+end
+
+--[[
+function draw_rotated_tile(x,y,rot,mx,my,w,flip,scale)
+  scale = scale or 1
+  w+=.8
+  local halfw, cx  = scale*-w/2, mx + w/2 -.4
+  local cs, ss, cy = cos(rot)/scale, -sin(rot)/scale, my-halfw/scale-.4
+  local sx, sy, hx, hy = cx + cs*halfw, cy - ss*halfw, w*(flip and -4 or 4)*scale, w*4*scale
+
+  --this just draw a bounding box to show the exact draw area
+  rect(x-hx,y-hy,x+hx,y+hy,5)
+
+  for py = y-hy, y+hy do
+    tline(x-hx, py, x+hx, py, sx + ss*halfw, sy + cs*halfw, cs/8, -ss/8)
+    halfw+=1/8
+  end
+end
+]]
 __gfx__
 000000008888888889abc12e00aaaa00666666660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000009999999989abc12e0aaaaaa0666666660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

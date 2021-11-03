@@ -44,12 +44,13 @@ function _init()
  level=1
  level_text=nil
  board={}
- gun={
-  x1=48,y1=120,
-  x2=0,y2=0,
-  a=90,r=12,
-  ax=0,ay=0
- }
+ gun=gun(48,120,12)
+ --gun={
+ -- x1=48,y1=120,
+ -- x2=0,y2=0,
+ -- a=90,r=12,
+ -- ax=0,ay=0
+ --}
  gun_speed=3
  penguin➡️=penguin(63,113)
  preview=bub(108,12,0,0,1)
@@ -167,8 +168,6 @@ function _draw()
  draw_pusher()
  draw_shots(96,82)
  draw_score(100,42)
-
- spr(16,36,112,3,2) --gun
 
  for k,v in pairs(board) do
   local x,y=b2px(k)
@@ -913,6 +912,20 @@ function penguin(x,y)
  return add(drawable,p)
 end
 
+function gun(x,y,len)
+ local g={
+  a=90,r=len,x1=x,y1=y
+ }
+ 
+ g.update=function(my)
+ end
+ 
+ g.draw=function(my)
+  spr(16,x-12,y-12,3,2) --gun base
+ end
+ 
+ return add(drawable,g)
+end
 __gfx__
 000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc0bb000000660000000000000000000000000000000000000
 00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6b7f300006765000000000000000000000000000000000000
