@@ -4,8 +4,8 @@ __lua__
 
 function _init()
 	a=0
-	pa=0
-	manual=false
+	pa=-1
+	manual=true
 end
 
 function _update()
@@ -19,8 +19,12 @@ function _update()
  end
 end
 
+function dist(x1,y1,x2,y2)
+ return sqrt((x1-x2)^2+(y1-y2)^2)
+end 
+
 function rotate(x,y,cx,cy,a)
- local ca,sa=cos(a),sin(a)
+ local ca,sa=cos(a),-sin(a)
  x-=cx y-=cy
  local rx=x*ca-y*sa
  local ry=x*sa+y*ca
@@ -55,6 +59,14 @@ function tfill(x,y,w,h,tx,ty)
  end
 end
 
+function out(...)
+ local str=""
+ for i in all({...}) do
+  str=str.." "..i
+ end
+ printh(str)
+end
+
 function _draw()
  if (pa==a) return
  
@@ -66,7 +78,6 @@ function _draw()
  local os=r
  
  tfill(cx,cy,is*2,is*2,7,2)
- --rect(cx-is,cy-is,cx+is,cy+is,10)
  circ(cx,cy,r,11)
  
  local rect1={{cx-os,cy-os},
@@ -86,31 +97,33 @@ function _draw()
  rotate_shape(lines,cx,cy,a/360)
  draw_shape(lines,9) 
  
- draw_tile(20,20,1,0,a/360)
- draw_rotated_tile(
-  40,20,a/360,1,0,1)
- draw_tile2(60,20,1,0,a/360)
- draw_tile3(96,70,7,2,a/360)
+ draw_tile(30,20,24,24,7,2,a/360)
+ draw_tile2(80,20,24,7,2,a/360)
+ draw_tile3(96,74,7,2,a/360)
  
  print(a,7)
 end
 
-function draw_tile(x,y,tx,ty,ang)
- local cos_a,sin_a=cos(ang),-sin(ang)
- local x1,x2=-4,4
+function draw_tile(x,y,w,h,tx,ty,a)
+ local w,h=w-1,h-1
+ local hw,hh=w/2,h/2
+ local step=0
 
- for off_y=-4,4 do
-  local _y=off_y
-  tline(x+x1*cos_a-sin_a*_y,
-        y+x1*sin_a+cos_a*_y,
-        x+x2*cos_a-sin_a*_y,
-        y+x2*sin_a+cos_a*_y,
-        tx,(ty+4)/8)
+ for _y=-hh,hh do
+  local x1,y1=
+   rotate(x-hw,y+_y,x,y,a)
+  local x2,y2=
+   rotate(x+hw,y+_y,x,y,a)
+  tline(x1,y1,x2,y2,
+        tx,ty+step,1/w)
+  step+=1/h
  end
 end
 
-function draw_tile2(x,y,tx,ty,ang)
- local cos_a,sin_a=cos(ang),sin(ang)
+
+
+function draw_tile2(x,y,s,tx,ty,ang)
+ local cos_a,sin_a=cos(ang),-sin(ang)
  
  -- the draw box needs to be
  -- able to hold the rotated
@@ -118,10 +131,10 @@ function draw_tile2(x,y,tx,ty,ang)
  -- from corner to corner
  -- only if we care about
  -- 1:1 scale
- local w=8*sqrt(2)
- local half=w/2
+ local w=s*sqrt(2)-1
+ local hw,hh=w/2,w/2
  local x1,y1,x2,y2=
-  -half,-half,half,half
+        -hw,-hh,hw,hh
   
  -- source box also needs to
  -- include diagonals so it
@@ -159,8 +172,11 @@ function draw_tile2(x,y,tx,ty,ang)
  rect(x+x1,y+y1,x+x2,y+y2,6)
 end
 
+
+
+
 function draw_tile3(x,y,tx,ty,ang)
- local cos_a,sin_a=cos(ang),sin(ang)
+ local cos_a,sin_a=cos(ang),-sin(ang)
  
  -- the draw box needs to be
  -- able to hold the rotated
@@ -178,13 +194,17 @@ function draw_tile3(x,y,tx,ty,ang)
  local bdx=mid(-1,sqrt2*cos_a,1)
  local bdy=mid(-1,sqrt2*sin_a,1)
  
- local moff=sqrt(bdx^2+bdy^2)/2
+ -- moff is the offset in map
+ -- coord, basically radius
+ --local moff=sqrt(bdx^2+bdy^2)/2
+ local moff=sqrt2/2
  
- local w=24*moff*2
- local half=w/2
+ local w=32*moff*2 -- output range
+ local hw=w/2
  local x1,y1,x2,y2=
-  -half,-half,half,half
+        -hw,-hw,hw,hw
   
+ rect(x-hw,y-hw,x+hw,y+hw,5)
 
  -- center of the tile is
  -- is just .5 from the corner
@@ -194,10 +214,6 @@ function draw_tile3(x,y,tx,ty,ang)
  -- map tile, range -moff,moff
  local step=-moff
  
- -- x col vect, left side
- local cosx=cos_a*-moff
- local sinx=sin_a*-moff
-
  -- somehow need to keep
  -- from reading past the
  -- tile boundary for that we
@@ -206,74 +222,37 @@ function draw_tile3(x,y,tx,ty,ang)
  -- mdx,mdy - should just be
  -- a modificaiton on moff
  -- based on ang
+ 
+ -- x col vect, left side
 
- for _y=y1,y2-1 do
+ for _y=y1,y2 do
+  -- in map coords
+  local _x=sqrt(.5-step^2)
+  --_x=mid(-.5,_x,.5)
+  -- renormalize width
+  local _w=2*_x*w/sqrt2
+  local _hw=_w/2
+
+  
+  local cosx=cos_a*-_x//-moff
+  local sinx=sin_a*-_x//-moff
   local siny=sin_a*step
   local cosy=cos_a*step
-  tline(x+x1,y+_y,
-        x+x2,y+_y,
+  
+  out("_x:",_x,"_y:",_y,"_w:",_w)
+  tline(x-_hw,y+_y,
+        x+_hw,y+_y,
         ctx+cosx-siny,
         cty+sinx+cosy,
         -- map mdx,mdy to
         -- output size w
         -- considering moff
-        cos_a*moff*2/w,
-        sin_a*moff*2/w)
+        cos_a*_x*2/_w,
+        sin_a*_x*2/_w)
   -- map output range to tile
  step+=(2*moff)/w
  end
- --rect(x+x1,y+y1,x+x2,y+y2,6)
- pset(x-bdx*half,y+bdy*half,11)
 end
-
-
-function draw_rotated_tile(
- x,y,rot,mx,my,w)
-  w+=.8 --???
-  local halfw=-w/2 --? why neg
-  --cx/cy center
-  local cx, cy=
-   mx-halfw-.4, my-halfw-.4
-   
-  -- pre-calc'd cos/sin
-  local cr, sr=
-   cos(rot), sin(rot)
-   
-  -- rotated values?
-  -- center circle values
-  -- these are the x comps
-  -- of the column vector and
-  -- won't change so are pre-
-  -- computed.
-  local rx, ry=
-    cx+cr*halfw, cy+sr*halfw
-    
-  -- ??
-  local hx, hy=w*4, w*4
-  
-  rect(x-hx,y-hy,x+hx,y+hy,5)
-
-  -- weird, instead rotating
-  -- the lines, it's rotating
-  -- the way the source is read
-  for py=y-hy,y+hy do
-    tline(x-hx,py,
-          x+hx,py,
-          rx-sr*halfw,
-          ry+cr*halfw,
-          -- scale the step to
-          -- the output line
-          -- length of 8?
-          cr/8, sr/8)
-    
-    -- this varies the y comp
-    -- of the coumn vector of
-    -- each line end
-    halfw+=1/8
-  end
-end
-
-
 __gfx__
 000000008888888889abc12e00aaaa0066666666fdddfddd00000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000009999999989abc12e0aaaaaa066666666dddfdddf00000000000000000000000000000000000000000000000000000000000000000000000000000000
