@@ -169,16 +169,14 @@ function draw_tile4(x,y,tx,ty,ang)
 
   -- circle boundary, find
   -- circle chord at map y 
-  --local _x=sqrt(.5-step^2)
-  
-  local _x=.5/cos_a
+  local _x=sqrt(.5-step^2)
+  --local _x=.5/cos_a
 
   -- offset triangle with edge
-  local _ox=sin_a*step/cos_a
-  
-  --if (_dy<0) _ox=cos_a*_dy/sin_a
-  
-  local _oxw=w*_ox/sqrt2/2
+  --local _ox=sin_a*step/cos_a  
+  --local _oxw=w*_ox/sqrt2/2
+  local _ox=0
+  local _oxw=0
   
   -- renormalize tline width
   local _w=w*(2*_x/sqrt2)
@@ -188,12 +186,18 @@ function draw_tile4(x,y,tx,ty,ang)
   local sinx=sin_a*-(_x-_ox)//-moff
   local siny=sin_a*step
   local cosy=cos_a*step
-  
-    
-  local _dy=step
+   
+  --local _dy=step*cos_a
+  --if _dy<-.5 then
+  -- _ox=cos_a*_dy/sin_a
+  -- _oxw=w*_ox/sqrt2/2
+  -- _hw=0
+  -- cosx=cos_a*-(_x+_ox)
+  -- sinx=sin_a*-(_x+_ox)
+  --end
   
   --out("_x:",_x,"_y:",_y,"_w:",_w)
-  out("_dy:",_dy)
+  out("_dy:",_dy,"_ox",_ox,"_oxw",_oxw)
   tline(x-_hw+_oxw,y+_y,
         x+_hw+_oxw,y+_y,
         ctx+cosx-siny,
@@ -205,6 +209,9 @@ function draw_tile4(x,y,tx,ty,ang)
         sin_a*_x*2/_w)
   -- map output range to tile
  step+=(2*moff)/w
+ 
+ local scale=32
+ pset(32+(cosx-siny)*scale,74+(sinx+cosy)*scale,12)
  end
 end
 -->8
