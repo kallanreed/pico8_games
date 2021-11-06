@@ -9,7 +9,7 @@ __lua__
 
 hi_score=0
 hi_score_str=""
---music(0,0,7)
+music(0,0,7)
 
 function start_level()
  top_off=0
@@ -19,7 +19,7 @@ function start_level()
 
  set_level(level)
  
- update_gun()
+ gun:update()
  next_preview()
  ●:reset()
  next_preview()
@@ -44,14 +44,7 @@ function _init()
  level=1
  level_text=nil
  board={}
- gun=gun(48,120,12)
- --gun={
- -- x1=48,y1=120,
- -- x2=0,y2=0,
- -- a=90,r=12,
- -- ax=0,ay=0
- --}
- gun_speed=3
+ gun=gun(48,128,16)
  penguin➡️=penguin(63,113)
  preview=bub(108,12,0,0,1)
  ●=bub(0,0,0,0,1)
@@ -75,26 +68,24 @@ function _update60()
 
  if btn(⬆️) then
   gun.a=90
-  update_gun()
+  gun:update()
  end
  if btn(⬅️) then
   gun.a+=incr
-  update_gun()
+  gun:update()
   penguin➡️:up()
  end
  if btn(➡️) then
   gun.a-=incr
-  update_gun()
+  gun:update()
   penguin➡️:down()
  end
  
  if btnp(❎)
  and not in_flight then
-  sfx(32)
   shot_cnt+=1
   in_flight=true
-  ●.dx=gun.ax*gun_speed
-  ●.dy=gun.ay*gun_speed
+  gun:launch(●)
  end
  
  foreach(gen, do_update)
@@ -138,17 +129,6 @@ function _update60()
  end
 end
 
-function update_gun()
- gun.a=mid(20,gun.a,160)
- 
- local a=gun.a/360
- gun.ax=cos(a)
- gun.ay=sin(a)
- gun.x2=gun.ax*gun.r+gun.x1
- gun.y2=gun.ay*gun.r+gun.y1
-end
-
-
 -- main draw
 
 function _draw()
@@ -162,7 +142,7 @@ function _draw()
   fillp(∧)
   rectfill(x*16,y*16,x*16+16,y*16+16,col)
   fillp()
- end 
+ end
  
  map(0,0,0,0,16,16)
  draw_pusher()
@@ -176,14 +156,6 @@ function _draw()
 
  draw_particles()
  foreach(drawable, do_draw)
- 
-  -- gun aim
- line(gun.x1,gun.y1,
-  gun.x2,gun.y2,7)
- line(gun.x1+1,gun.y1,
-  gun.x2+1,gun.y2,13)
- line(gun.x1-1,gun.y1,
-  gun.x2-1,gun.y2,6) 
  
  preview:draw()
  ●:draw()
@@ -386,8 +358,8 @@ function bub(x,y,dx,dy,col)
   end,
 
   reset=function(my)
-   my.x=gun.x1-4
-   my.y=gun.y1
+   my.x=gun.x-4 --half width
+   my.y=gun.y-8
    my.dx=0
    my.dy=0
    my.col=preview.col
@@ -397,7 +369,7 @@ end
 
 function next_preview()
  if (not board) return
- -- todo: too expensive
+ -- todo: expensive
  local k=keys(board)
  preview.col=board[rnd(k)]
 end
@@ -804,6 +776,50 @@ function camera_shake(sec)
   end
  })
 end
+
+function rotate(x,y,cx,cy,a)
+ local ca,sa=cos(a),-sin(a)
+ x-=cx y-=cy
+ local rx=x*ca-y*sa
+ local ry=x*sa+y*ca
+ return rx+cx,ry+cy
+end
+
+function draw_shape(points,col)
+ for i=2,#points do
+  local a=points[i-1]
+  local b=points[i]
+  line(a[1],a[2],b[1],b[2],(col or 7))
+ end
+end
+
+function rotate_shape(points,cx,cy,a)
+ for p in all(points) do
+  local x,y=p[1],p[2]
+  p[1],p[2]=rotate(x,y,cx,cy,a)
+ end
+end
+
+function tfill(x,y,w,h,tx,ty,tw,th)
+ local hx,hy=w/2,h/2
+ local step=0
+ tw=tw or 1
+ th=th or 1
+
+ for _y=y-hy,y+hy do
+  tline(x-hx,_y,x+hx,_y,
+   tx,ty+step,tw/w)
+  step+=th/h
+ end
+end
+
+function out(...)
+ local str=""
+ for i in all({...}) do
+  str=str.." "..i
+ end
+ printh(str)
+end
 -->8
 -- data
 
@@ -914,14 +930,45 @@ end
 
 function gun(x,y,len)
  local g={
-  a=90,r=len,x1=x,y1=y
+  a=90,r=len,x=x,y=y,
+  speed=3
  }
  
+ g.draw_barrel=function(my)
+  local _x,_y=my.x,my.y-5
+  local barrel={
+   {my.r-2,-2,my.r,-2,5},
+   {4,-1,my.r,-1,6},
+   {4,0,my.r,0,7},
+   {4,1,my.r,1,13},
+   {my.r-2,2,my.r,2,5},
+  }
+ 
+  for l in all(barrel) do
+   local x1,y1=rotate(
+    l[1],l[2],0,0,my.a/-360)
+   local x2,y2=rotate(
+    l[3],l[4],0,0,my.a/-360)
+   line(_x+x1,_y+y1,
+    _x+x2,_y+y2,l[5])
+  end
+ end
+ 
+ g.launch=function(my,bub)
+  sfx(32)
+  local _a=my.a/360
+  local ax,ay=cos(_a),sin(_a)
+  bub.dx=ax*my.speed
+  bub.dy=ay*my.speed
+ end
+ 
  g.update=function(my)
+  my.a=mid(20,my.a,160)
  end
  
  g.draw=function(my)
-  spr(16,x-12,y-12,3,2) --gun base
+  spr(16,x-12,y-16,3,2) --gun base
+  my:draw_barrel()
  end
  
  return add(drawable,g)
@@ -943,14 +990,14 @@ __gfx__
 00000000ec1111ce00000000000067d6000000006cc667d6555567d6555555556cc66cc66cc66cc605665d5d5d56665000005567776550000000556777655000
 0000000ec111111ce0000000000067d600000000cc6667d6565567d656555655cc66cc66cc66cc66056565d5d5d5665000009955555990000000995555599000
 000000ec11111111ce000000000067dc00000000c66c67dc555567dc55555555c66cc66cc66cc66c0566565d5d56565000000000000000000000000000000000
-00000ec111eeee111ce0000000000000000000000000000000000000000000000000000000000000000000000900000050577579005775790000000000000000
-0000ec111e0000e111ce000000000000000000000000000000000000000000000000000000000000000000009820000055577a7900577a790000000000000000
-000ec111e000000e111ce00000000000000000000000000000000000000000000000000000000000000000000200000055567777055677770000000000000000
-00ec1111e000000e1111ce0000000000000000000000000000000000000000000000000000000000000000000000000005556777055567770000000000000000
-0ec11111e000000e11111ce000000000000000000000000000000000000000000000000000000000000000000000000000555777555557770000000000000000
-ec111111e000000e111111ce00000000000000000000000000000000000000000000000000000000000000000000000000005567000055670000000000000000
-ec1111111e0000e1111111ce00000000000000000000000000000000000000000000000000000000000000000000000000009955000099550000000000000000
-ec11111111eeee11111111ce00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000ec111eeee111ce0000010101010000000000000000000000000000000000000000000000000000000000900000050577579005775790000000000000000
+0000ec111e0000e111ce000001010101000000000000000000000000000000000000000000000000000000009820000055577a7900577a790000000000000000
+000ec111e000000e111ce00010101010000000000000000000000000000000000000000000000000000000000200000055567777055677770000000000000000
+00ec1111e000000e1111ce0001010101000000000000000000000000000000000000000000000000000000000000000005556777055567770000000000000000
+0ec11111e000000e11111ce010101010000000000000000000000000000000000000000000000000000000000000000000555777555557770000000000000000
+ec111111e000000e111111ce01010101000000000000000000000000000000000000000000000000000000000000000000005567000055670000000000000000
+ec1111111e0000e1111111ce10101010000000000000000000000000000000000000000000000000000000000000000000009955000099550000000000000000
+ec11111111eeee11111111ce01010101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000577579000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000577a79000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005567777000000000000000000000000
