@@ -9,7 +9,7 @@ __lua__
 
 hi_score=0
 hi_score_str=""
---music(0,0,7)
+music(0,0,7)
 
 function start_level()
  arena.top=0
@@ -45,19 +45,16 @@ function _init()
  level_text=nil
  
  arena={
-  top=0,
-  left=8,
+  top=0, left=8,
+  -- adjusted for bub width
   right=84,
-  cen_x=function(my)
-   return (my.right-my.left)/2+my.left
-  end,
   bound=function(my,val)
    return mid(my.left,val,my.right)
   end
  }
  
  board={}
- gun=launcher(arena:cen_x(),128)
+ gun=launcher(48,128)
  checkers=checker_board()
  penguin➡️=penguin(63,113)
  preview=bub(108,12,0,0,1)
@@ -99,6 +96,8 @@ function _update60()
   shot_cnt+=1
   in_flight=true
   gun:launch(●)
+  --dbg.hit=0
+  --dbg.dest=0
  end
  
  foreach(gen, do_update)
@@ -178,7 +177,7 @@ function _draw()
  end
  
  --draw_debug()
- 
+
  pal({[0]=129,1,2,3,4,5,6,7,
   8,9,10,139,12,13,140,138},1)
 end
@@ -778,7 +777,6 @@ function random_level(n)
 end
 
 levels={
--- 1-10
 {[0]=0,0,0,0,4,4,0,0,0,0,
       0,0,0,4,4,4,0,0,0,0},
 {[0]=1,1,1,1,0,0,2,2,2,2},
