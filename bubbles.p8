@@ -4,15 +4,15 @@ __lua__
 -- bubble trouble
 -- by kallanreed
 
--- todo: waay too many
+-- todo: way too many
 -- iterations over the board
 
 hi_score=0
 hi_score_str=""
-music(0,0,7)
+--music(0,0,7)
 
 function start_level()
- top_off=0
+ arena.top=0
  shot_cnt=0
  shot_max=5
  in_flight=false
@@ -32,7 +32,7 @@ end
 
 function _init()
  pal()
- poke(0x5f2e,1)
+ poke(0x5f2e,1) --don't reset pal
  
  part={}
  gen={}
@@ -43,8 +43,22 @@ function _init()
  score=0
  level=1
  level_text=nil
+ 
+ arena={
+  top=0,
+  left=8,
+  right=84,
+  cen_x=function(my)
+   return (my.right-my.left)/2+my.left
+  end,
+  bound=function(my,val)
+   return mid(my.left,val,my.right)
+  end
+ }
+ 
  board={}
- gun=launcher(48,128,16)
+ gun=launcher(arena:cen_x(),128)
+ checkers=checker_board()
  penguin➡️=penguin(63,113)
  preview=bub(108,12,0,0,1)
  ●=bub(0,0,0,0,1)
@@ -57,7 +71,6 @@ function _init()
 end
 
 -- main update
-
 function _update60()
  if game_over then
   if (btnp(❎)) _init()
@@ -94,18 +107,24 @@ function _update60()
  update_particles()
 
  if (not in_flight) return
+ 
+ -- bubble update returns
+ -- true when the bubble
+ -- has landed.
  if (not ●:update()) return
  
  -- bubble has landed
  in_flight=false
+ next_preview()
+ 
+ -- update the pusher
  if shot_cnt>=shot_max then
   sfx(36)
-  top_off+=8
+  arena.top+=8
   shot_cnt=0
   camera_shake(.5)
  end
- next_preview()
-   
+
  -- test for win
  if not next(board) then
   -- no bubbles left, advance
@@ -119,7 +138,7 @@ function _update60()
  
  -- test for lose
  local mk=max_key(board)
- local off_y=top_off/8
+ local off_y=arena.top/8
  if flr(mk/10)+off_y>12 then
   sfx(38)
   camera_shake(.3)
@@ -129,26 +148,19 @@ function _update60()
  end
 end
 
--- main draw
 
+-- main draw
 function _draw()
  cls()
  
- -- checker board
- for i=0,63 do
-  local x,y=i%8,flr(i/8)
-
-  local col=band(i+y,1)
-  fillp(∧)
-  rectfill(x*16,y*16,x*16+16,y*16+16,col)
-  fillp()
- end
+ checkers:draw()
 
  map(0,0,0,0,16,16)
  draw_pusher()
  draw_shots(96,82)
  draw_score(100,42)
 
+ -- draw board
  for k,v in pairs(board) do
   local x,y=b2px(k)
   draw_bubble(x,y,v)
@@ -164,6 +176,8 @@ function _draw()
   draw_game_over()
   return
  end
+ 
+ --draw_debug()
  
  pal({[0]=129,1,2,3,4,5,6,7,
   8,9,10,139,12,13,140,138},1)
@@ -183,10 +197,10 @@ function draw_shots(x,y)
 end
 
 function draw_pusher()
- local top=top_off-8
+ local top=arena.top-8
 
  if top>=0 then
-  for i=0,top,8 do
+  for i=0,top-8,8 do
    map(16,0,8,i,11,1)
   end
 
@@ -202,176 +216,50 @@ function draw_game_over()
           6,7,6,7,6,5,6},1)
 end
 
-
--- board traversal
-
-function get_unrooted()
- local unrooted=keys(board)
- local visited={}
- 
- -- test all roots
- for i=0,9 do
-  get_ur_rec(i,unrooted,visited)
- end
- return unrooted
-end
-
-function get_ur_rec(i,u,v)
- -- already visited?
- if (count(v,i)>0) return
- add(v,i)
- 
- if (board[i]==nil) return
- del(u,i) -- reachable
-
- local ns=neighbors(i)
- for n in all(ns.all) do
-  get_ur_rec(n,u,v)
- end
-end
-
--- get all connected matching
-function get_matching(i,col)
- local matches={}
- get_mtch_rec(i,col,matches,{})
- return matches
-end
-
-function get_mtch_rec(i,col,m,v)
- -- already visited?
- if (count(v,i)>0) return
- add(v,i)
- 
- if (board[i]!=col) return
- add(m,i)
- 
- local ns=neighbors(i)
- for n in all(ns.all) do
-  get_mtch_rec(n,col,m,v)
- end
-end
-
--- handle bubble placement
-function place_bubble(i,col)
-  board[i]=col
-  local matches=
-   get_matching(i,col)
-
-  -- bubble removal
-  if #matches>2 then
-   sfx(35) -- fall
-   local multi=1
-   -- matching bubbles
-   for m in all(matches) do
-    local x,y=b2px(m)
-    local s=10*multi
-    local c=bub_col[col]
-    score_float(x,y,c,s)
-    score+=s
-    multi+=0.1
-    
-    bub_fall(x,y,col)
-    board[m]=nil
-   end
-
-   -- unrooted bubbles
-   local unrooted=get_unrooted()
-   for u in all(unrooted) do
-    local x,y=b2px(u)
-    local s=10*multi
-    local c=bub_col[board[u]]
-    score_float(x,y,c,s)
-    score+=s
-    multi+=0.1
-    
-    bub_fall(x,y,board[u])
-    board[u]=nil
-   end
-  else
-   sfx(34) -- stick
-  end
-end
-
-function update_bubble(b)
- -- todo: collision is a mess
- local ci=px2b(b.x+4,b.y+4)
- assert(board[ci]==nil)
-
- -- next position
- local nx=b.x+b.dx
- local ny=b.y+b.dy
- 
- -- board bounds
- if nx<8 or nx>84 then
-  nx=mid(8,nx,84)
-  b.dx=-b.dx
-  sfx(33)
- end
- 
- -- next board index
- local hit=false
- local ni=px2b(nx+4,ny+4)
- 
- -- test if collision
- local ns=neighbors(ni)
- local to_test={
-  ni, ns.nw, ns.ne, ns.w, ns.e
- }
- 
- for ti in all(to_test) do
-  if ti!=nil then
-   tx,ty=b2px(ti)
-   hit=
-    board[ti]!=nil and
-    bub_overlap(nx,ny,tx,ty)
-  end
-  if (hit) break
- end
-
- -- place bubble if it hits the
- -- top or another bubble
- if ny<=top_off or hit then
-  place_bubble(ci,b.col)
-  b:reset()
-  return true
- end
- 
- b.x=nx
- b.y=ny
- return false
-end
-
-function draw_bubble(x,y,col)
- pal(1,bub_col[col])
- spr(1,x,y)
- pal()
-end
-
-function bub(x,y,dx,dy,col)
- return {
-  x=x,y=y,dx=dx,dy=dy,col=col,
-
-  update=update_bubble,
-
-  draw=function(my)
-   draw_bubble(my.x,my.y,my.col)
-  end,
-
-  reset=function(my)
-   my.x=gun.x-4 --half width
-   my.y=gun.y-8
-   my.dx=0
-   my.dy=0
-   my.col=preview.col
-  end
- }
-end
-
 function next_preview()
  if (not board) return
  -- todo: expensive
  local k=keys(board)
  preview.col=board[rnd(k)]
+end
+
+
+-- debugging
+dbg={
+ -- start pos
+ lu=0,ru=0,
+ ld=0,rd=0,
+ 
+ -- ending pos
+ tlu=0,tru=0,
+ tld=0,trd=0,
+ 
+ -- collision
+ hit=0,
+ 
+ -- placed
+ dest=0,
+}
+
+function draw_debug()
+ 
+ local show_i=function(i,c)
+  local x,y=b2px(i)
+  rect(x,y,x+7,y+7,c or 8)
+ end
+ 
+ show_i(dbg.lu)
+ show_i(dbg.ru)
+ show_i(dbg.ld)
+ show_i(dbg.rd)
+ 
+ show_i(dbg.tlu,9)
+ show_i(dbg.tru,9)
+ show_i(dbg.tld,9)
+ show_i(dbg.trd,9)
+ 
+ show_i(dbg.hit,10)
+ show_i(dbg.dest,11)
 end
 -->8
 -- utils
@@ -435,16 +323,24 @@ function b2px(i)
  local offx=8 -- l edge
 
  if (band(y,1)==1) offx+=4
- return x*8+offx,y*8+top_off
+ return x*8+offx,y*8+arena.top
 end
 
 -- pixels to board index
 function px2b(x,y)
  local offx=-8 -- l edge
- local y=flr((y-top_off)/8)
+ local y=flr((y-arena.top)/8)
+ -- let y be negative because
+ -- it makes it easier to place
+ -- the top row.
  
  if (band(y,1)==1) offx-=4
  local x=flr((x+offx)/8)
+ 
+ -- ensure x doesn't wrap
+ -- across lines
+ x=mid(0,x,9)
+ 
  return y*10+x
 end
 
@@ -459,15 +355,6 @@ function map_rng(v,
  local d_out=max_out-min_out
  return (v-min_in)/d_in*
          d_out+min_out
-end
-
--- test if 2 bubbles with the
--- specified coords overlap
-function bub_overlap(ax,ay,bx,by)
- local a={sp=1,x=ax,y=ay,w=8,h=8}
- local b={sp=1,x=bx,y=by,w=8,h=8}
- return overlaps(a,b)
-  and pxl_overlap(a,b)
 end
 
 function overlaps(a,b)
@@ -560,20 +447,16 @@ function neighbors(i)
   return _y*10+_x
  end
 
- local ns={all={}}
- local add_n=function(k,v)
-  ns[k]=v
-  if (v) add(ns.all,v)
- end
-
- add_n("nw",at(x+offx,y-1))
- add_n("ne",at(x2+offx,y-1))
- add_n("w",at(x-1,y))
- add_n("e",at(x+1,y))
- add_n("sw",at(x+offx,y+1))
- add_n("se",at(x2+offx,y+1))
- 
- return ns
+ -- counter clockwise
+ -- starting with e
+ return {
+  at(x+1,y),       -- e
+  at(x2+offx,y-1), -- ne
+  at(x+offx,y-1),  -- nw
+  at(x-1,y),       -- w
+  at(x+offx,y+1),  -- sw
+  at(x2+offx,y+1)  -- se
+ }
 end
 -->8
 -- particles
@@ -594,7 +477,9 @@ function explode(x,y,cols)
    end
   end
   p.draw=function(my)
-   circfill(my.x,my.y,1,my.col)
+   local r=map_rng(
+    my.age,0,my.mxage,2,.5)
+   circfill(my.x,my.y,r,my.col)
   end
 
   add(part,p)
@@ -819,18 +704,6 @@ function dist(x1,y1,x2,y2)
 end 
 
 -- draw rotated map tile
--- x,y: output will be centered here
--- tx,ty: map coords to the
---        top,left tile to draw
--- ang: rotation angle
--- scale: scale factor
---        default:1
--- tw,th: tiles to read
---        default:1
--- tcxo,tcyo:
---        tile center offsets
---        in tile units
---        default:0
 function rtile(x,y,tx,ty,ang,
  scale,tw,th,tcxo,tcyo)
  
@@ -942,6 +815,7 @@ function lever(x,y,ux,uy,
  return l
 end
 
+
 function penguin(x,y)
  local p={
   ani=0, sp=12,
@@ -965,7 +839,7 @@ function penguin(x,y)
   end
   
   if my.state=="idle"
-  and t()-my.ani>.8 then
+  and t()-my.ani>=.8 then
    my.ani=t()
    my.sp=_if(my.sp==12,14,12)
   end
@@ -986,7 +860,7 @@ function penguin(x,y)
 end
 
 
-function launcher(x,y,len)
+function launcher(x,y)
  local g={ a=90,x=x,y=y }
  local speed=3
  
@@ -996,6 +870,9 @@ function launcher(x,y,len)
   local ax,ay=cos(_a),sin(_a)
   bub.dx=ax*speed
   bub.dy=ay*speed
+  -- move to end of barrel
+  bub.x+=12*ax
+  bub.y+=12*ay
  end
  
  g.update=function(my)
@@ -1011,6 +888,244 @@ function launcher(x,y,len)
  
  return add(drawable,g)
 end
+
+function checker_board()
+ return {
+  ani=0,ox=0,
+  draw=function(my)
+   if t()-my.ani>=1.6 then
+    my.ani=t()
+    my.ox^^=2
+   end
+  
+   for i=0,63 do
+    local x,y=i%8,flr(i/8)
+    local col=band(i+y,1)
+    fillp(∧)
+    rectfill(x*16+my.ox,y*16,
+     x*16+16,y*16+16,col)
+    fillp()
+   end
+  end
+ }
+end
+-->8
+-- bubble handling
+
+function bub(x,y,dx,dy,col)
+ return {
+  x=x,y=y,dx=dx,dy=dy,col=col,
+
+  update=update_bubble,
+
+  draw=function(my)
+   draw_bubble(my.x,my.y,my.col)
+  end,
+
+  reset=function(my)
+   my.x=gun.x-4 --half width
+   my.y=gun.y-8
+   my.dx=0
+   my.dy=0
+   my.col=preview.col
+  end
+ }
+end
+
+function draw_bubble(x,y,col)
+ pal(1,bub_col[col])
+ spr(1,x,y)
+ pal()
+end
+
+function update_bubble(b)
+ -- next position
+ local nx=b.x+b.dx
+ local ny=b.y+b.dy
+ 
+ -- board bounds
+ if nx<arena.left
+ or nx>arena.right then
+  nx=arena:bound(nx)
+  b.dx=-b.dx
+  sfx(33)
+ end
+ 
+ --dbg.lu,dbg.ru,dbg.ld,dbg.rd=
+ -- get_overlap_cells(b.x,b.y)
+ --dbg.tlu,dbg.tru,dbg.tld,dbg.trd=
+ -- get_overlap_cells(nx,ny)
+ 
+ local dest_cell=nil
+
+ -- collide with other bubbles
+ local to_test=
+  {get_overlap_cells(nx,ny)}
+
+ for ti in all(to_test) do
+  if ti!=nil then
+   tx,ty=b2px(ti)
+   if board[ti]!=nil and
+      bub_overlap(nx,ny,tx,ty)
+   then
+    dest_cell=
+     get_dest_cell(ti,nx,ny)
+    --dbg.hit=ti
+    break
+   end
+  end
+ end
+ 
+ if not dest_cell
+ and ny<=arena.top then
+   -- top of arena
+   dest_cell=
+    get_dest_cell(
+     px2b(nx,ny),nx,ny)
+ end
+ 
+ if board[dest_cell] then
+  out("dest not empty:",dest_cell)
+ end
+
+ if dest_cell then
+  --dbg.dest=dest_cell
+  place_bubble(dest_cell,b.col)
+  b:reset()
+  return true
+ end
+ 
+ b.x=nx
+ b.y=ny
+ return false
+end
+
+-- test if 2 bubbles with the
+-- specified coords overlap
+function bub_overlap(ax,ay,bx,by)
+ local a={sp=1,x=ax,y=ay,w=8,h=8}
+ local b={sp=1,x=bx,y=by,w=8,h=8}
+ return overlaps(a,b)
+  and pxl_overlap(a,b)
+end
+
+-- gets all the cells the
+-- bubble overlaps
+function get_overlap_cells(x,y)
+ return
+  px2b(x,y),
+  px2b(x+7,y),
+  px2b(x,y+7),
+  px2b(x+7,y+7)
+end
+
+-- given a board cell index and
+-- the position of a bubble,
+-- determine which neighbor
+-- cell should be the dest
+function get_dest_cell(hit,nx,ny)
+ local hx,hy=b2px(hit)
+ -- direction from hit to bub
+ local dir=atan2(nx-hx,ny-hy)
+ 
+ -- .0833 is 30/360
+ -- 6 is #dirs
+ local ix=flr((dir+.0833)*6)+1
+ if (ix>6) ix-=6
+ 
+ local ns=neighbors(hit)
+ return ns[ix]
+end
+
+-- handle bubble placement
+function place_bubble(i,col)
+  board[i]=col
+  local matches=
+   get_matching(i,col)
+
+  -- bubble removal
+  if #matches>2 then
+   sfx(35) -- fall
+   local multi=1
+   -- matching bubbles
+   for m in all(matches) do
+    local x,y=b2px(m)
+    local s=10*multi
+    local c=bub_col[col]
+    score_float(x,y,c,s)
+    score+=s
+    multi+=0.1
+    
+    bub_fall(x,y,col)
+    board[m]=nil
+   end
+
+   -- unrooted bubbles
+   local unrooted=get_unrooted()
+   for u in all(unrooted) do
+    local x,y=b2px(u)
+    local s=10*multi
+    local c=bub_col[board[u]]
+    score_float(x,y,c,s)
+    score+=s
+    multi+=0.1
+    
+    bub_fall(x,y,board[u])
+    board[u]=nil
+   end
+  else
+   sfx(34) -- stick
+  end
+end
+
+-- board traversal
+
+function get_unrooted()
+ local unrooted=keys(board)
+ local visited={}
+ 
+ -- test all roots
+ for i=0,9 do
+  get_ur_rec(i,unrooted,visited)
+ end
+ return unrooted
+end
+
+function get_ur_rec(i,u,v)
+ -- already visited?
+ if (count(v,i)>0) return
+ add(v,i)
+ 
+ if (board[i]==nil) return
+ del(u,i) -- reachable
+
+ local ns=neighbors(i)
+ for n in all(ns) do
+  get_ur_rec(n,u,v)
+ end
+end
+
+-- get all connected matching
+function get_matching(i,col)
+ local matches={}
+ get_mtch_rec(i,col,matches,{})
+ return matches
+end
+
+function get_mtch_rec(i,col,m,v)
+ -- already visited?
+ if (count(v,i)>0) return
+ add(v,i)
+ 
+ if (board[i]!=col) return
+ add(m,i)
+ 
+ local ns=neighbors(i)
+ for n in all(ns) do
+  get_mtch_rec(n,col,m,v)
+ end
+end
+
 __gfx__
 000000000066660066cc66cc67dc66cc66cc66cc000067dc6666666666cc6d7666cc66cc66cc66cc0bb000000660000000000000000000000000000000000000
 00000000061111606cc66cc667d66cc66cc66cc6000067d6777777776cc66d766cc66cc66cc66cc6b7f300006765000000000000000000000000000000000000
@@ -1020,14 +1135,14 @@ __gfx__
 00700700611111156cc66cc667d66cc6dddddddd000067d66cc66cc66cc66d766cc66ccddcc66cc6000000000000000000055777577755000000555555555000
 0000000006111150cc66cc6667d6cc6677777777000067d6cc66cc66cc66cd76cc66ccd77d66cc66000000000000000000057777777775000005577757775500
 0000000000555500c66cc66c67dcc66c66666666000067dcc66cc66cc66ccd76c66ccd7777dcc66c000000000000000000577577777577500005777777777500
-000000000000000000000000000067dc0000000066cc67dc555567dc5555555566cc6d7777dc66cc056665d5d565665000577579a77577500057757777757750
-000000000000000000000000000067d6000000006cc667d65d5d67d65d5d5d5d6cc66cd77dc66cc605665d5d5d56665000577a799a7a775000577a79a77a7750
-000000000000000000000000000067d600000000cc6667d665d567d665d565d5cc66cc6ddc66cc66056565d5d5d566500556777777777655055777799a777755
-0000000000eeee0000000000000067dc00000000c66c67dc565667dc56565656c66cc66cc66cc66c0566565d5d56565005556777777765550555677777776555
-000000000ecccce000000000666067dc6660666066cc67dc666667dc6666666666cc66cc66cc66cc056665d5d565665000555777777755500055577777775550
-00000000ec1111ce00000000000067d6000000006cc667d6555567d6555555556cc66cc66cc66cc605665d5d5d56665000005567776550000000556777655000
-0000000ec111111ce0000000000067d600000000cc6667d6565567d656555655cc66cc66cc66cc66056565d5d5d5665000009955555990000000995555599000
-000000ec11111111ce000000000067dc00000000c66c67dc555567dc55555555c66cc66cc66cc66c0566565d5d56565000000000000000000000000000000000
+000000000000000000000000000067dc0000000066cc67dc555567dc5555555566cc6d7777dc66cc055d566666565d5000577579a77577500057757777757750
+000000000000000000000000000067d6000000006cc667d65d5d67d65d5d5d5d6cc66cd77dc66cc605d5d5666665d55000577a799a7a775000577a79a77a7750
+000000000000000000000000000067d600000000cc6667d665d567d665d565d5cc66cc6ddc66cc66055d5656665d5d500556777777777655055777799a777755
+0000000000eeee0000000000000067dc00000000c66c67dc565667dc56565656c66cc66cc66cc66c05d565666565d55005556777777765550555677777776555
+000000000ecccce000000000666067dc6660666066cc67dc666667dc6666666666cc66cc66cc66cc055d566666565d5000555777777755500055577777775550
+00000000ec1111ce00000000000067d6000000006cc667d6555567d6555555556cc66cc66cc66cc605d5d5666665d55000005567776550000000556777655000
+0000000ec111111ce0000000000067d600000000cc6667d6565567d656555655cc66cc66cc66cc66055d5656665d5d5000009955555990000000995555599000
+000000ec11111111ce000000000067dc00000000c66c67dc555567dc55555555c66cc66cc66cc66c05d565666565d55000000000000000000000000000000000
 00000ec111eeee111ce000001010101000d6d5000000000000000000000000000000000000000000000000000900000050577579005775790000000000000000
 0000ec111e0000e111ce00000101010100d6d5000000000000000000000000000000000000000000000000009820000055577a7900577a790000000000000000
 000ec111e000000e111ce000101010100006d0000000000000000000000000000000000000000000000000000200000055567777055677770000000000000000
@@ -1207,10 +1322,10 @@ __sfx__
 1518000004125071250b125000000410000000041000000004125071250b12500000000000000000000000000b125031250612500000000000000000000000000b12503125061250000000000000000000000000
 591800001f8221e8321c8321880218802188021f8221e8221c8221880218802188021782218802238221880224822188021880218802218322383224822188022883224802248322480223832188022a83200802
 591800001f822188021c8221880218802188021f8221c8221f822180021c822180021c822180021f822180021e822180021b8221800218002180022382224822278222400223822180021e8221f8221e82200002
-591800000402610026040261002604026100260402610026030260f026030260f026060261202606026120260702613026070261302607026130260702613026090261502609026150260c026180260c02618026
-591800000712613126071261312607126131260712613126061261212606126121260b126171260b126171260b126171260b126171260b126171260b126171260c126181260c12618126101261c126101261c126
-59180000101261c126101261c126101261c126101261c126101261c126101261c126131261f126131261f126121261e126121261e126121261e126121261e126171211712217122171221712217122171220b121
-59180000131261f126131261f126131261f126131261f126121261e126121261e126101261c126101261c1260f1261b1260f1261b1260f1261b1260f1261b1261212112122121221212212122121221212206121
+591800000402710027040271002704027100270402710027030270f027030270f027060271202706027120270702713027070271302707027130270702713027090271502709027150270c027180270c02718027
+591800000712713127071271312707127131270712713127061271212706127121270b127171270b127171270b127171270b127171270b127171270b127171270c127181270c12718127101271c127101271c127
+59180000101271c127101271c127101271c127101271c127101271c127101271c127131271f127131271f127121271e127121271e127121271e127121271e127171211712217122171221712217122171220b121
+59180000131271f127131271f127131271f127131271f127121271e127121271e127101271c127101271c1270f1271b1270f1271b1270f1271b1270f1271b1271212112122121221212212122121221212206121
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1243,8 +1358,12 @@ __music__
 00 090c0e44
 00 090d0f44
 00 08094344
-00 10114344
+00 10114844
 00 12134344
 00 0a0c0e44
-02 0b0d0f44
+00 0b0d0f44
+00 080a0e44
+00 080b0f44
+00 090c0e44
+02 090d0f44
 

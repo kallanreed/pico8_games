@@ -24,6 +24,9 @@ function _draw()
  -- rotation center offset
  rtile(48,86,11,1,a,1.75,2,2,1,1)
 
+ -- negative offsets
+ rtile(72,16,1,1,-a,2,1,1,-.25,-.25)
+
 end
 -->8
 -- rtile
@@ -39,7 +42,7 @@ end
 --        default:1
 -- tcxo,tcyo:
 --        tile center offsets
---        in tile units (positive)
+--        in tile units
 --        default:0
 -- nb: leave space around the
 -- tiles to rotate on the map
@@ -95,10 +98,15 @@ function rtile(x,y,tx,ty,ang,
  -- use radius=tw/2, the corners
  -- will be clipped. we need the
  -- length from center to corner
- -- to use as the radius.
+ -- to use as the radius. we
+ -- need to find the larger
+ -- of the two radii to ensure
+ -- the output fits.
+ -- todo: make more efficient.
  -- tile radius
- local trad=
-  sqrt((tx-tcx)^2+(ty-tcy)^2)
+ local trad=max(
+  sqrt((tx-tcx)^2+(ty-tcy)^2),
+  sqrt((tx+tw-tcx)^2+(ty+th-tcy)^2))
   
  -- to output the texture we
  -- draw a bunch of horizontal
