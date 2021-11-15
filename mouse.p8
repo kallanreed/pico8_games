@@ -8,12 +8,26 @@ __lua__
 --150.615bpm
 sec_per_beat=.39837
 
+-- boxes are lost into holes
+-- traps act like walls
+-- holes hold for 10 ticks
+-- yarn balls enter from side
+-- then go wall to wall
+-- cats have some kind of ai
+
 arena={
  t=1,b=28,l=1,r=30
 }
 
 board={
- icons={35,34},
+ -- 0=empty
+ -- 1=block
+ -- 2=wall
+ -- 3=hole
+ -- 4=trap
+ -- 5=cat
+ -- 6=cheese
+ icons={35,34,18,19,32,17},
  data={},
  
  at=function(my,x,y)
@@ -46,25 +60,41 @@ board={
   -- as metadata
  end,
  
- push=function(my,x,y,dir)
+ move=function(my,x,y,dir)
   local dstx,dsty=x,y
   if (dir==⬅️) dstx-=1
   if (dir==➡️) dstx+=1
   if (dir==⬆️) dsty-=1
   if (dir==⬇️) dsty+=1
   
-  local dst=my:at(dstx,dsty)
-  -- todo bounds
-  if (dst==1
-   and my:push(dstx,dsty,dir))
-   or dst==0 then
-   my.data[px2b(dstx,dsty)]=my:at(x,y)
-   my.data[px2b(x,y)]=0
-   return true
+  -- bounds check
+  if dstx<arena.l
+  or dstx>arena.r
+  or dsty<arena.t
+  or dsty>arena.b
+  then
+   return false
   end
   
-  out("no push")
-  return false
+  local dst=my:at(dstx,dsty)
+
+  -- wall,trap,cat
+  if dst==2 or dst==4
+  or dst==5 then
+   return false
+  end
+
+  -- try pushing blocks
+  if dst==1 and
+   not my:move(dstx,dsty,dir)
+  then
+   return false
+  end
+  
+  -- move tile
+  my.data[px2b(dstx,dsty)]=my:at(x,y)
+  my.data[px2b(x,y)]=0
+  return true
  end
 }
 
@@ -74,24 +104,19 @@ player={
   spr(16,my.x*4,my.y*4)
  end,
  update=function(my)
-  local nx,ny,dir=my.x,my.y,nil
-
+  local dir,nx,ny=nil,my.x,my.y
   if btnp(⬆️) then
-   ny-=1 dir=⬆️
+   dir=⬆️ ny-=1
   elseif btnp(⬇️) then
-   ny+=1 dir=⬇️
+   dir=⬇️ ny+=1
   elseif btnp(⬅️) then
-   nx-=1 dir=⬅️
+   dir=⬅️ nx-=1
   elseif btnp(➡️) then
-   nx+=1 dir=➡️
+   dir=➡️ nx+=1
   end
-  -- todo, just let 'push'
-  -- handle bounds check
-  nx=mid(arena.l,nx,arena.r)
-  ny=mid(arena.t,ny,arena.b)
-  
+
   if dir!=nil
-  and board:push(my.x,my.y,dir) then
+  and board:move(my.x,my.y,dir) then
    my.x=nx my.y=ny
   end
  end
@@ -277,7 +302,7 @@ e00e0000097000000000000000650000000000000000000000000000000000000000000000000000
 44444444444444444444444444444444000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 40000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 40000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-40000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+40000000030405060000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 40000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 40000000000020000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 40000001111111111111111100000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
