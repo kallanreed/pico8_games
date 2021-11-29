@@ -4,7 +4,7 @@ __lua__
 -- disco mouse
 -- kallanreed
 
---music(0,0,7)
+music(0,0,7)
 --150.615bpm
 sec_per_beat=.39837
 
@@ -35,6 +35,10 @@ board={
   return my.data[px2b(x,y)]
  end,
  
+ set=function(my,x,y,val)
+  my.data[px2b(x,y)]=val
+ end,
+
  draw=function(my)
   for i=0,#my.data-1 do
    -- offset math works best
@@ -60,6 +64,8 @@ board={
     if px==7 then
      player.x,player.y=c,r
      out("player",c,r)
+    elseif px==5 then
+     add(cats, cat:new(c,r))
     end
    end
   end
@@ -85,65 +91,58 @@ board={
   end
   
   local dst=my:at(dx,dy)
+  out(src,dst)
+
+  if (dst==2) return false
   
   -- things that can move
   -- player,block
 
   -- player
   if src==7 then
-   if dst==0 then
-    return my:do_move(x,y,dx,dy)
-   elseif dst==1 then
-    return my:move(dx,dy,dir)
+   if dst==1
+   and not my:move(dx,dy,dir) then
+    return false
+   elseif dst==3 then
+    player.stuck_until=t()+10
+   elseif dst==4 or dst==5 then
+    lives.val-=1
    elseif dst==6 then
     score.val+=50
-    return my:do_move(x,y,dx,dy)
    end
+   return my:do_move(x,y,dx,dy)
+  end
 
   -- block
-  elseif src==1 then
+  if src==1 then
    if dst==0 then
     return my:do_move(x,y,dx,dy)
-   elseif dst==1 then
-    return my:move(dx,dy,dir)
+   elseif dst==1
+   and my:move(dx,dy,dir) then
+    return my:do_move(x,y,dx,dy)
+   elseif dst==3 then
+    -- fall in hole
+    my:set(x,y,0)
+    return true
    end
   end
   
-  --[[
-  -- wall,trap,cat
-  if dst==2 or dst==4
-  or dst==5 then
-   return false
-  end
-
-  -- try pushing blocks
-  if dst==1 and
-   not my:move(dstx,dsty,dir)
-  then
-   return false
-  end
-  
-  -- move tile
-  my.data[px2b(dstx,dsty)]=my:at(x,y)
-  my.data[px2b(x,y)]=0
-  return true]]
+  return false
  end,
  
  do_move=function(my,sx,sy,dx,dy)
-  my.data[px2b(dx,dy)]=my:at(sx,sy)
-  my.data[px2b(sx,sy)]=0
+  my:set(dx,dy,my:at(sx,sy))
+  my:set(sx,sy,0)
   return true
  end
 }
 
-mover={
-}
-
 player={
- x=0,y=0,
- draw=function(my)
-  --spr(16,my.x*4,my.y*4)
+ x=0,y=0,stuck_until=0,
+ is_stuck=function(my)
+  return t()<my.stuck_until
  end,
+
  update=function(my)
   local dir,nx,ny=nil,my.x,my.y
   if btnp(⬆️) then
@@ -157,20 +156,20 @@ player={
   end
 
   if dir!=nil
-  and board:move(my.x,my.y,dir) then
-   my.x=nx my.y=ny
+  and not my:is_stuck()
+  and board:move(my.x,my.y,dir)
+  then
+   my.x=nx
+   my.y=ny
   end
  end
 }
 
 cat={
  x=0,y=0,
- new=function(my,o)
-  o=o or {}
+ new=function(my,x,y)
+  o={x=x,y=y}
   setmetatable(o,my)
-  o.x,o.y=
-   ceil(rnd(arena.r)),
-   ceil(rnd(arena.b))
   return o
  end,
  update=function(my)
@@ -181,12 +180,11 @@ cat={
    my.x+sgnz(dx),
    my.y+sgnz(dy)
   if board:at(nx,ny)==0 then
+   -- todo
+   board:do_move(my.x,my.y,nx,ny)
    my.x=nx
    my.y=ny
   end
- end,
- draw=function(my)
-  spr(32,my.x*4,my.y*4)
  end
 }
 cat.__index=cat
@@ -221,8 +219,7 @@ function _init()
  pal_beat=0
  cat_beat=0
  beat_ani=0
- --add(cats,cat:new())
- --add(cats,cat:new())
+
  board:load_map(68)
 end
 
@@ -269,10 +266,8 @@ function _draw()
  pal()
  
  board:draw()
- foreach(cats, do_draw)
  score:draw()
  lives:draw()
- player:draw()
 end
 
 -->8
