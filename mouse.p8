@@ -68,8 +68,8 @@ board={
  end,
  
  move=function(my,x,y,dir)
-  -- dx=dest_x,dy=dest_y
   local dx,dy,src=x,y,my:at(x,y)
+ 
   if (dir==⬅️) dx-=1
   if (dir==➡️) dx+=1
   if (dir==⬆️) dy-=1
@@ -88,7 +88,26 @@ board={
   
   -- things that can move
   -- player,block
-  
+
+  -- player
+  if src==7 then
+   if dst==0 then
+    return my:do_move(x,y,dx,dy)
+   elseif dst==1 then
+    return my:move(dx,dy,dir)
+   elseif dst==6 then
+    score.val+=50
+    return my:do_move(x,y,dx,dy)
+   end
+
+  -- block
+  elseif src==1 then
+   if dst==0 then
+    return my:do_move(x,y,dx,dy)
+   elseif dst==1 then
+    return my:move(dx,dy,dir)
+   end
+  end
   
   --[[
   -- wall,trap,cat
@@ -108,6 +127,12 @@ board={
   my.data[px2b(dstx,dsty)]=my:at(x,y)
   my.data[px2b(x,y)]=0
   return true]]
+ end,
+ 
+ do_move=function(my,sx,sy,dx,dy)
+  my.data[px2b(dx,dy)]=my:at(sx,sy)
+  my.data[px2b(sx,sy)]=0
+  return true
  end
 }
 
