@@ -108,12 +108,14 @@ board={
    elseif dst==3 then
     player.stuck_until=t()+10
    elseif dst==4 or dst==5 then
+    my:do_move(x,y,dx,dy)
     player:lose_hp()
+    smoke(dx,dy)
     return false
    elseif dst==6 then
     score.val+=50
    end
-   return my:do_move(x,y,dx,dy)
+   return my:do_move(x,y,dx,dy) 
   end
 
   -- block
@@ -240,6 +242,8 @@ function _init()
  beat_ani=0
 
  board:load_map(68)
+
+ drawable={}
 end
 
 function _update()
@@ -285,6 +289,8 @@ function _draw()
  pal()
  
  board:draw()
+ 
+ foreach(drawable,do_draw)
  score:draw()
  lives:draw()
  player:draw()
@@ -321,6 +327,27 @@ function out(...)
   str=str.." "..i
  end
  printh(str)
+end
+-->8
+-- items
+
+function smoke(x,y)
+ local s={}
+ local sp,sp_last,ani=37,40,t()
+ 
+ s.draw=function()
+  if t()-ani>.15 then
+   sp+=1
+   if sp>sp_last then
+    del(drawable,s)
+    return
+   end
+   ani=t()
+  end
+  spr(sp,x*4,y*4)
+ end
+ 
+ return add(drawable,s)
 end
 __gfx__
 00000000222200000000111122221111222211112222111100001111222200000000000000000000000000000000000000000000000000000000000000000000
